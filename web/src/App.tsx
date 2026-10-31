@@ -87,7 +87,7 @@ function TradeDrawer({ good, state, player, pair, onClose, onTraded }: {
     try {
       const hash = MOCK
         ? mockTrade(pair.address, good.id, side, n)
-        : await trade(pair, state.ducat, good.id, side, toUnits(n), toUnits(out * 0.97));
+        : await trade(pair, state.ducat, good.id, side, toUnits(n), toUnits(out * 0.97), state.feeMode !== 'native');
       setStatus({ kind: 'done', hash });
       setAmount('');
       onTraded();
@@ -119,7 +119,7 @@ function TradeDrawer({ good, state, player, pair, onClose, onTraded }: {
       <dl className="quote">
         <div><dt>You get about</dt><dd>{fmt(out, side === 'buy' ? 3 : 2)} {side === 'buy' ? good.symbol : 'DUCAT'}</dd></div>
         <div><dt>Price impact</dt><dd className={impact > 3 ? 'warn' : ''}>{fmt(impact, 2)}%</dd></div>
-        <div><dt>Network fee</dt><dd>paid in DUCAT</dd></div>
+        <div><dt>Network fee</dt><dd>{state.feeMode === 'native' ? 'covered by the harbour' : 'paid in DUCAT'}</dd></div>
       </dl>
       <button className="btn primary wide" disabled={n <= 0 || n > max || status.kind === 'busy'} onClick={submit}>
         {status.kind === 'busy' ? status.text : `${side === 'buy' ? 'Buy' : 'Sell'} ${good.name}`}

@@ -78,6 +78,7 @@ export function mockState(address: string): HarbourState {
     anchors: [{ day: '2026-10-31', root: hex(), proof: hex(), players: 8 }],
     players: board.length,
     mode: 'contract',
+    feeMode: 'ducat',
   };
 }
 

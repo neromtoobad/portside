@@ -14,7 +14,7 @@ export interface HarbourState {
   history: Record<number, { t: number; p: number }[]>;
   leaderboard: Standing[]; trades: Trade[];
   anchors: { day: string; root: string; proof: string; players: number }[];
-  players: number; mode: 'contract' | 'remark';
+  players: number; mode: 'contract' | 'remark'; feeMode: 'ducat' | 'native';
 }
 export interface Player extends Partial<Standing> { registered: boolean; rank: number | null; trades: Trade[] }
 

@@ -14,7 +14,14 @@ const ROUND_SECONDS = Number(process.env.ROUND_SECONDS ?? 600);
 const DOCK_SECONDS = Number(process.env.DOCK_SECONDS ?? 45);
 const STARTER_DUCAT = Number(process.env.STARTER_DUCAT ?? 1000);
 /** Existential deposit (0.1) plus room for a few native fees, in tPOT hundredths. */
-const STARTER_POT_CENTS = BigInt(process.env.STARTER_POT_CENTS ?? 20);
+/**
+ * How players pay network fees. 'ducat' uses ChargeAssetTxPayment so a player never holds gas;
+ * 'native' is the fallback: the harbour keeps every player's tPOT tank topped up instead.
+ */
+const FEE_MODE = (process.env.FEE_MODE ?? 'ducat') as 'ducat' | 'native';
+const STARTER_POT_CENTS = BigInt(process.env.STARTER_POT_CENTS ?? (FEE_MODE === 'native' ? 100 : 20));
+/** In native mode, refill a player's tank when it drops under this many tPOT hundredths. */
+const TANK_LOW_CENTS = BigInt(process.env.TANK_LOW_CENTS ?? 40);
 const DATA_DIR = process.env.DATA_DIR ?? '.data';
 const CHAIN_HTTP = process.env.CHAIN_HTTP ?? CHAIN_WS.replace(/^ws/, 'http');
 const PORT = Number(process.env.PORT ?? 8790);
@@ -170,6 +177,18 @@ async function indexTrades() {
   state.lastBlock = head;
 }
 
+/** Native-fee fallback: refill any player whose tPOT is running low, in one batch. */
+async function topUpTanks() {
+  const addrs = Object.keys(state.players);
+  if (!addrs.length) return;
+  const accounts = (await api.query.system.account.multi(addrs)) as any[];
+  const low = addrs.filter((_, i) => accounts[i].data.free.toBigInt() < (TANK_LOW_CENTS * POT) / 100n);
+  if (!low.length) return;
+  const refill = ((STARTER_POT_CENTS - TANK_LOW_CENTS / 2n) * POT) / 100n;
+  await enqueue(() => send(api, api.tx.utility.batchAll(low.map((a) => api.tx.balances.transferKeepAlive(a, refill))), keeper));
+  log('topped up', low.length, 'tanks');
+}
+
 let busy = false;
 async function tick() {
   if (busy) return;
@@ -182,6 +201,7 @@ async function tick() {
     await refreshPrices();
     await indexTrades();
     await refreshLeaderboard();
+    if (FEE_MODE === 'native') await topUpTanks();
     await anchorDayIfNeeded();
     save();
   } catch (e) {
@@ -225,6 +245,7 @@ app.get('/api/state', (c) => c.json({
   anchors: state.anchors.slice(0, 5),
   players: Object.keys(state.players).length,
   mode: drawer.mode,
+  feeMode: FEE_MODE,
 }));
 
 app.get('/api/player/:address', (c) => {

@@ -32,14 +32,14 @@ const withId = (id: number) => ({ WithId: id });
 
 /**
  * Swaps on Portaldot's native DEX (pallet-asset-conversion). Buying spends DUCAT for a good,
- * selling spends the good for DUCAT. The fee is paid in DUCAT via ChargeAssetTxPayment,
- * so players never need to hold tPOT for gas.
+ * selling spends the good for DUCAT. By default the fee is paid in DUCAT via ChargeAssetTxPayment,
+ * so players never hold gas; in the keeper's native fallback it comes from a tPOT tank the harbour refills.
  */
-export async function trade(pair: KeyringPair, ducat: number, goodId: number, side: 'buy' | 'sell', amountIn: bigint, minOut: bigint) {
+export async function trade(pair: KeyringPair, ducat: number, goodId: number, side: 'buy' | 'sell', amountIn: bigint, minOut: bigint, feeInDucat = true) {
   const api = await chain();
   const path = side === 'buy' ? [withId(ducat), withId(goodId)] : [withId(goodId), withId(ducat)];
   const tx = api.tx.assetConversion.swapExactTokensForTokens(path, amountIn, minOut, pair.address, true);
-  const signed = await tx.signAsync(pair, { assetId: withId(ducat), nonce: -1 });
+  const signed = await tx.signAsync(pair, feeInDucat ? { assetId: withId(ducat), nonce: -1 } : { nonce: -1 });
   return (await api.rpc.author.submitExtrinsic(signed)).toHex();
 }
 
