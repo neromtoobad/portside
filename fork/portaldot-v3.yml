@@ -1,0 +1,18 @@
+# Local fork of the Portaldot V3 testnet for development. Real runtime, fake balances.
+endpoint: ws://127.0.0.1:9944  # ws-relay.mjs -> https://test-node-v3.portaldot.dev
+port: 8000
+# Pinned so the local storage cache (.chopsticks/db.sqlite) stays valid across restarts.
+block: 265063
+rpc-timeout: 300000
+mock-signature-host: true
+# The runtime imports statement-store host functions Chopsticks does not implement; stub them.
+allow-unresolved-imports: true
+db: ../.chopsticks/db.sqlite
+runtime-log-level: 0
+import-storage:
+  System:
+    Account:
+      # Alice, Bob and Charlie get 1M tPOT each so we can play without testnet tokens
+      - [[5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY], { providers: 1, data: { free: "100000000000000000000" } }]
+      - [[5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty], { providers: 1, data: { free: "100000000000000000000" } }]
+      - [[5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y], { providers: 1, data: { free: "100000000000000000000" } }]

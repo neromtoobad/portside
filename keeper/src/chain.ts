@@ -1,0 +1,86 @@
+import { ApiPromise, WsProvider } from '@polkadot/api';
+import { Keyring } from '@polkadot/keyring';
+import type { KeyringPair } from '@polkadot/keyring/types';
+import type { SubmittableExtrinsic } from '@polkadot/api/types';
+import { cryptoWaitReady } from '@polkadot/util-crypto';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import 'dotenv/config';
+
+export const CHAIN_WS = process.env.CHAIN_WS ?? 'ws://127.0.0.1:8000';
+export const ON_FORK = CHAIN_WS.includes('127.0.0.1') || CHAIN_WS.includes('localhost');
+
+/** 1 tPOT = 10^14 planck. Game assets use 10 decimals. */
+export const POT = 10n ** 14n;
+export const UNIT = 10n ** 10n;
+
+const ASSET_BASE = Number(process.env.ASSET_BASE ?? 8_801_000);
+export const DUCAT = ASSET_BASE;
+export const GOODS = [
+  { id: ASSET_BASE + 1, symbol: 'COFFEE', name: 'Coffee', basePrice: 12 },
+  { id: ASSET_BASE + 2, symbol: 'SPICE', name: 'Spice', basePrice: 30 },
+  { id: ASSET_BASE + 3, symbol: 'SILK', name: 'Silk', basePrice: 55 },
+  { id: ASSET_BASE + 4, symbol: 'SALT', name: 'Salt', basePrice: 4 },
+  { id: ASSET_BASE + 5, symbol: 'COPPER', name: 'Copper', basePrice: 20 },
+] as const;
+
+export const native = 'Native' as const;
+export const withId = (id: number) => ({ WithId: id });
+export type AssetKind = typeof native | ReturnType<typeof withId>;
+
+export async function connect() {
+  await cryptoWaitReady();
+  return ApiPromise.create({ provider: new WsProvider(CHAIN_WS, 2_500, {}, 120_000), noInitWarn: true });
+}
+
+/** On the fork the keeper is Alice; on the testnet it is the hackathon wallet. */
+export function keeperPair(): KeyringPair {
+  const keyring = new Keyring({ type: 'sr25519', ss58Format: 42 });
+  if (process.env.KEEPER_SEED) return keyring.addFromUri(process.env.KEEPER_SEED);
+  if (ON_FORK) return keyring.addFromUri('//Alice');
+  return keyring.addFromUri(readFileSync(`${homedir()}/.portaldot-hh.seed`, 'utf8').trim());
+}
+
+export function pairFromUri(uri: string): KeyringPair {
+  return new Keyring({ type: 'sr25519', ss58Format: 42 }).addFromUri(uri);
+}
+
+export interface Sent {
+  hash: string;
+  block: string;
+  events: { section: string; method: string; data: unknown }[];
+}
+
+/**
+ * Signs, submits and waits for inclusion. Rejects with the decoded dispatch error.
+ * `feeAsset` pays the fee in a game asset through ChargeAssetTxPayment.
+ */
+export function send(api: ApiPromise, tx: SubmittableExtrinsic<'promise'>, signer: KeyringPair, feeAsset?: number): Promise<Sent> {
+  return new Promise((resolve, reject) => {
+    const opts = feeAsset === undefined ? {} : { assetId: withId(feeAsset) };
+    tx.signAndSend(signer, opts, ({ status, events, dispatchError, txHash }) => {
+      if (dispatchError) {
+        if (dispatchError.isModule) {
+          const { section, name, docs } = api.registry.findMetaError(dispatchError.asModule);
+          return reject(new Error(`${section}.${name}: ${docs.join(' ')}`));
+        }
+        return reject(new Error(dispatchError.toString()));
+      }
+      if (status.isInBlock) {
+        resolve({
+          hash: txHash.toHex(),
+          block: status.asInBlock.toHex(),
+          events: events.map(({ event }) => ({ section: event.section, method: event.method, data: event.data.toHuman() })),
+        });
+      }
+    }).catch(reject);
+  });
+}
+
+/** Chopsticks only produces blocks on demand; nudge it after submitting. */
+export async function newBlock(api: ApiPromise) {
+  if (ON_FORK) await api.provider.send('dev_newBlock', [{}]);
+}
+
+export const toUnits = (n: number | bigint) => BigInt(Math.round(Number(n) * 1e4)) * (UNIT / 10_000n);
+export const fromUnits = (v: bigint | string | number) => Number(BigInt(v.toString().replace(/,/g, ''))) / Number(UNIT);

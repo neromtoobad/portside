@@ -1,0 +1,15 @@
+import { ApiPromise, WsProvider } from '@polkadot/api';
+const api = await ApiPromise.create({ provider: new WsProvider(process.env.CHAIN_WS ?? 'ws://127.0.0.1:8000'), noInitWarn: true });
+const meta = (tx: any) => tx.meta.args.map((a: any) => `${a.name}: ${a.type}`).join(', ');
+console.log('createPool(', meta(api.tx.assetConversion.createPool), ')');
+console.log('swapExactTokensForTokens(', meta(api.tx.assetConversion.swapExactTokensForTokens), ')');
+console.log('assets.create(', meta(api.tx.assets.create), ')');
+console.log('nfts.create(', meta(api.tx.nfts.create), ')');
+console.log('runtime apis:', api.runtimeVersion.apis.length, 'call.assetConversionApi:', Object.keys(api.call.assetConversionApi ?? {}));
+const pools = await api.query.assetConversion.pools.entries();
+console.log('pools:', pools.map(([k]) => JSON.stringify(k.args[0].toHuman())).join(' | '));
+const assets = await api.query.assets.asset.entries();
+console.log('assets:', assets.map(([k, v]) => `${k.args[0]}:${(v as any).unwrap().owner}`).slice(0, 20).join(' '));
+console.log('extrinsic ext:', api.registry.signedExtensions.join(','));
+console.log('ChargeAssetTxPayment type:', JSON.stringify(api.registry.getSignedExtensionTypes()['ChargeAssetTxPayment'] ?? null));
+process.exit(0);
