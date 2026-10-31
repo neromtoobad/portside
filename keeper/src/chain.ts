@@ -79,7 +79,7 @@ export function send(api: ApiPromise, tx: SubmittableExtrinsic<'promise'>, signe
 
 /** Chopsticks only produces blocks on demand; nudge it after submitting. */
 export async function newBlock(api: ApiPromise) {
-  if (ON_FORK) await api.provider.send('dev_newBlock', [{}]);
+  if (ON_FORK) await (api as any)._rpcCore.provider.send('dev_newBlock', [{}]);
 }
 
 export const toUnits = (n: number | bigint) => BigInt(Math.round(Number(n) * 1e4)) * (UNIT / 10_000n);

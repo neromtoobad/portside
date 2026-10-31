@@ -13,7 +13,7 @@ const FEE_POOL_POT = BigInt(process.env.FEE_POOL_POT ?? 20);
 const FEE_POOL_DUCAT = BigInt(process.env.FEE_POOL_DUCAT ?? 20_000);
 
 async function ensureAsset(id: number, symbol: string, name: string) {
-  const existing = await api.query.assets.asset(id);
+  const existing = (await api.query.assets.asset(id)) as any;
   if (existing.isSome) {
     const owner = (existing.unwrap() as any).owner.toString();
     if (owner !== keeper.address) throw new Error(`asset ${id} already exists and belongs to ${owner}; set ASSET_BASE to a free range`);
@@ -29,7 +29,7 @@ async function ensureAsset(id: number, symbol: string, name: string) {
 const poolKey = (a: AssetKind, b: AssetKind) => [a, b];
 
 async function poolExists(a: AssetKind, b: AssetKind) {
-  return (await api.query.assetConversion.pools(poolKey(a, b))).isSome;
+  return ((await api.query.assetConversion.pools(poolKey(a, b))) as any).isSome;
 }
 
 /** Tries a direct goods/DUCAT pool and reports whether the runtime allows non-native pairs. */
