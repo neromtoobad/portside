@@ -8,3 +8,4 @@ contracts/typechain-types/
 .chopsticks/
 *.sqlite
 .DS_Store
+.data*/

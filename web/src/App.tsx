@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { getState, getPlayer, register, type HarbourState, type Player, type Good } from './api';
 import { loadWallet, trade, quote, toUnits, fromUnits } from './chain';
@@ -42,6 +42,41 @@ function Tide({ start, seconds, dockAt, now }: { start: number; seconds: number;
       </svg>
       <div><small>Tide turns in</small><b>{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</b></div>
     </div>
+  );
+}
+
+/** A good's recent price with a marker wherever news about it docked. */
+function PriceChart({ points, events, color }: { points: { t: number; p: number }[]; events: { t?: number; dir: number; magnitude: number }[]; color: string }) {
+  if (points.length < 2) return <div className="chart empty">Prices appear after the first few blocks.</div>;
+  const W = 340, H = 120, t0 = points[0].t, t1 = points[points.length - 1].t || t0 + 1;
+  const ps = points.map((x) => x.p), lo = Math.min(...ps) * 0.98, hi = Math.max(...ps) * 1.02;
+  const x = (t: number) => ((t - t0) / Math.max(1, t1 - t0)) * W;
+  const y = (p: number) => H - ((p - lo) / (hi - lo || 1)) * (H - 16) - 8;
+  const d = points.map((pt, i) => `${i ? 'L' : 'M'}${x(pt.t).toFixed(1)} ${y(pt.p).toFixed(1)}`).join(' ');
+  return (
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Recent price">
+      <path d={`${d} L${W} ${H} L0 ${H}Z`} fill={color} opacity="0.08" />
+      <path d={d} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      {events.filter((e) => e.t && e.t >= t0).map((e, i) => (
+        <g key={i}>
+          <line x1={x(e.t!)} x2={x(e.t!)} y1="0" y2={H} className="chart-mark" />
+          <text x={x(e.t!) + 3} y="11" className="chart-label">{e.dir > 0 ? '▲' : '▼'}{e.magnitude}%</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function HowTo({ onClose }: { onClose: () => void }) {
+  return (
+    <section className="howto card">
+      <ol>
+        <li><b>Read the board.</b> News drops at the start of every round and names the good it hits.</li>
+        <li><b>Trade before the ship docks.</b> When it lands, that price jumps or sinks by the posted amount.</li>
+        <li><b>Sell into the move.</b> Highest net worth at the end of the day takes the trophy.</li>
+      </ol>
+      <button className="x" onClick={onClose} aria-label="Hide how to play">×</button>
+    </section>
   );
 }
 
@@ -116,6 +151,11 @@ function TradeDrawer({ good, state, player, pair, onClose, onTraded }: {
         {chips.map((c, i) => <button key={i} onClick={() => setAmount(String(Math.min(c, max)))} disabled={max <= 0}>{side === 'buy' ? c : ['¼', '½', 'All'][i]}</button>)}
         <span className="muted">{side === 'buy' ? `purse ${fmt(purse)}` : `held ${fmt(held, 3)}`}</span>
       </div>
+      <PriceChart
+        points={state.history[good.id] ?? []}
+        events={state.events.concat(state.event ? [{ ...state.event, t: state.dockAt }] : []).filter((e) => state.goods[e.good]?.id === good.id && e.dir !== 0 && (e.docked ?? true))}
+        color={(state.prices[good.id]?.price ?? 0) >= good.basePrice ? '#1f7a4d' : '#c4412f'}
+      />
       <dl className="quote">
         <div><dt>You get about</dt><dd>{fmt(out, side === 'buy' ? 3 : 2)} {side === 'buy' ? good.symbol : 'DUCAT'}</dd></div>
         <div><dt>Price impact</dt><dd className={impact > 3 ? 'warn' : ''}>{fmt(impact, 2)}%</dd></div>
@@ -141,6 +181,22 @@ export default function App() {
   const [tab, setTab] = useState<'board' | 'ledger' | 'log'>('board');
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string>();
+  const [howto, setHowto] = useState(() => { try { return localStorage.getItem('portside.howto') !== 'hidden'; } catch { return true; } });
+  const [recap, setRecap] = useState<{ round: number; delta: number; rank: number }>();
+  const roundMark = useRef<{ round: number; worth: number }>();
+
+  // When a round closes, tell the player how their warehouse did.
+  useEffect(() => {
+    const round = state?.event?.round, worth = player?.worth;
+    if (round === undefined || worth === undefined || !player?.registered) return;
+    const mark = roundMark.current;
+    if (mark && round > mark.round) {
+      const rank = state!.leaderboard.findIndex((r) => r.address === pair?.address) + 1;
+      setRecap({ round: mark.round, delta: worth - mark.worth, rank });
+      setTimeout(() => setRecap(undefined), 7000);
+    }
+    if (!mark || round !== mark.round) roundMark.current = { round, worth };
+  }, [state?.event?.round, player?.worth, player?.registered]);
 
   useEffect(() => { loadWallet().then(({ pair, mnemonic }) => { setPair(pair); setMnemonic(mnemonic); }); }, []);
 
@@ -199,6 +255,16 @@ export default function App() {
       {offline && <div className="banner">Harbour office unreachable: {offline}. Retrying…</div>}
 
       <Board event={state.event} goodName={evGood?.name ?? ''} dockIn={state.dockAt - now} explorer={explorer} />
+
+      {howto && <HowTo onClose={() => { setHowto(false); try { localStorage.setItem('portside.howto', 'hidden'); } catch { /* fine */ } }} />}
+
+      {recap && (
+        <div className="recap" role="status">
+          <span>Round {recap.round} closed</span>
+          <b className={recap.delta >= 0 ? 'up' : 'down'}>{recap.delta >= 0 ? '+' : ''}{fmt(recap.delta)} DUCAT</b>
+          {recap.rank > 0 && <span>now #{recap.rank}</span>}
+        </div>
+      )}
 
       <main className="grid">
         <section className="card market">

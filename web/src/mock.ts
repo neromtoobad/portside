@@ -38,8 +38,7 @@ function swap(id: number, ducatIn: boolean, amountIn: number) {
   return out;
 }
 
-function step() {
-  const now = Date.now();
+function step(now = Date.now()) {
   if (now - roundStart > ROUND) {
     events.unshift({ ...event, round, t: roundStart });
     roundStart = now; round += 1; event = draw(); docked = event.dir === 0;
@@ -59,7 +58,7 @@ function step() {
   }
   rivals.forEach((r) => { r.worth += Math.round(Math.random() * 30 - 14); });
 }
-for (let i = 0; i < 60; i++) step();
+for (let i = 0; i < 60; i++) step(Date.now() - (60 - i) * 2500);
 
 const myWorth = () => me.DUCAT + GOODS.reduce((s, g) => s + me.goods[g.id] * price(g.id), 0);
 

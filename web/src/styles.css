@@ -203,3 +203,26 @@ b, .price b, .purse b, .val { font-variant-numeric: tabular-nums; }
   .purse { padding: 8px 12px; }
   .purse b { font-size: 15px; }
 }
+
+/* ---- how to play, round recap, drawer chart ---- */
+.howto { position: relative; margin: -4px 0 18px; padding: 12px 44px 12px 18px; }
+.howto ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.howto li { counter-increment: step; font-size: 13px; color: var(--muted); padding-left: 30px; position: relative; }
+.howto li::before { content: counter(step); position: absolute; left: 0; top: -2px; font: 800 24px/1 var(--display); color: var(--brass); }
+.howto li b { color: var(--ink); }
+.howto .x { position: absolute; top: 8px; right: 10px; border: 0; background: none; font-size: 22px; color: var(--muted); }
+.recap {
+  position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 40;
+  display: flex; gap: 12px; align-items: baseline;
+  background: var(--board); color: var(--flap); border-radius: 999px; padding: 10px 20px;
+  box-shadow: 0 12px 30px -12px #0b1a29; animation: drop .3s ease-out;
+}
+.recap b { font: 700 18px var(--mono); }
+.recap .up { color: #7fdcaa; }
+.recap .down { color: #ff9c86; }
+@keyframes drop { from { transform: translate(-50%, -16px); opacity: 0; } }
+.chart { display: block; width: 100%; height: 110px; margin: 0 0 12px; border: 1px solid var(--rule); border-radius: 10px; background: #fff; }
+.chart.empty { display: grid; place-items: center; font-size: 12px; color: var(--muted); }
+.chart-mark { stroke: var(--brass); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.chart-label { font: 600 9px var(--mono); fill: var(--brass); }
+@media (max-width: 700px) { .howto ol { grid-template-columns: 1fr; gap: 8px; } }
