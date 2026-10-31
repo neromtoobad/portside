@@ -80,14 +80,14 @@ function HowTo({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Onboard({ onJoin, busy, error }: { onJoin: (name: string) => void; busy: boolean; error?: string }) {
+function Onboard({ onJoin, busy, error, feeMode }: { onJoin: (name: string) => void; busy: boolean; error?: string; feeMode: HarbourState['feeMode'] }) {
   const [name, setName] = useState('');
   return (
     <div className="scrim">
       <form className="card onboard" onSubmit={(e) => { e.preventDefault(); onJoin(name); }}>
         <div className="hoist"><Flag symbol="COFFEE" size={28} /><Flag symbol="SPICE" size={28} /><Flag symbol="SILK" size={28} /><Flag symbol="SALT" size={28} /><Flag symbol="COPPER" size={28} /></div>
         <h2>Sign the harbour register</h2>
-        <p>You get a warehouse, <b>1,000 DUCAT</b> and a wallet that lives in this browser. Every trade is a real swap on Portaldot's DEX, and fees are paid in DUCAT.</p>
+        <p>You get a warehouse, <b>1,000 DUCAT</b> and a wallet that lives in this browser. Every trade is a real swap on Portaldot's DEX, and {feeMode === 'native' ? 'the harbour covers your network fees' : 'network fees are paid in DUCAT'}.</p>
         <label>Captain's name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={18} placeholder="e.g. Marlowe" autoFocus /></label>
         <button className="btn primary" disabled={busy}>{busy ? 'Opening your warehouse…' : 'Open my warehouse'}</button>
         {error && <p className="error">{error}</p>}
@@ -131,7 +131,7 @@ function TradeDrawer({ good, state, player, pair, onClose, onTraded }: {
     }
   }
 
-  const chips = side === 'buy' ? [50, 100, 250] : [0.25, 0.5, 1].map((f) => +(held * f).toFixed(4));
+  const chips = side === 'buy' ? [50, 100, 250] : [0.25, 0.5, 1].map((f) => Math.floor(held * f * 1e4) / 1e4);
   return (
     <aside className="drawer card">
       <header>
@@ -281,7 +281,7 @@ export default function App() {
                   <span className="name"><b>{g.name}</b><small>{g.symbol}</small></span>
                   <Spark points={state.history[g.id] ?? []} up={ch >= 0} />
                   <span className="price"><b>{fmt(p, 3)}</b><small className={ch >= 0 ? 'up' : 'down'}>{ch >= 0 ? '▲' : '▼'} {fmt(Math.abs(ch), 1)}%</small></span>
-                  <span className="held"><small>You hold</small><b>{held ? fmt(held, 2) : '—'}</b></span>
+                  <span className="held"><small>You hold</small><b>{held >= 0.005 ? fmt(held, 2) : '—'}</b></span>
                   <span className="go">Trade</span>
                 </button>
               );
@@ -321,7 +321,7 @@ export default function App() {
             <ul className="ledger">
               {state.events.map((e) => (
                 <li key={e.proof}>
-                  <span>R{e.round} <b>{e.title}</b></span>
+                  <span>{e.season !== state.season && `S${e.season} · `}R{e.round} <b>{e.title}</b></span>
                   <span className={e.dir > 0 ? 'up' : e.dir < 0 ? 'down' : 'muted'}>{state.goods[e.good]?.name} {e.dir ? `${e.dir > 0 ? '+' : '−'}${e.magnitude}%` : ''}</span>
                   <a href={explorer(e.proof)} target="_blank" rel="noreferrer">proof</a>
                 </li>
@@ -343,7 +343,7 @@ export default function App() {
       {selected !== undefined && goodOf(selected) && (
         <TradeDrawer good={goodOf(selected)!} state={state} player={player} pair={pair} onClose={() => setSelected(undefined)} onTraded={refresh} />
       )}
-      {!MOCK && player && !player.registered && <Onboard onJoin={join} busy={joining} error={joinError} />}
+      {!MOCK && player && !player.registered && <Onboard onJoin={join} busy={joining} error={joinError} feeMode={state.feeMode} />}
     </div>
   );
 }

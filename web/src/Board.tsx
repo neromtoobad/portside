@@ -61,7 +61,7 @@ export function Board({ event, goodName, dockIn, explorer }: { event?: HarbourEv
       <div className="board-foot">
         <span className="board-line">{event.line}</span>
         <span className={`dock ${docked ? 'done' : ''}`}>
-          {docked ? 'Ship docked · price moved' : <>Ship docks in <b>{mmss(dockIn)}</b> · trade before it lands</>}
+          {docked ? 'Ship docked · price moved' : dockIn > 0 ? <>Ship docks in <b>{mmss(dockIn)}</b> · trade before it lands</> : 'Ship docking now…'}
         </span>
       </div>
       <a className="proof" href={explorer(event.proof)} target="_blank" rel="noreferrer">
