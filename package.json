@@ -1,0 +1,5 @@
+{
+  "name": "portside",
+  "private": true,
+  "workspaces": ["contracts", "keeper", "web"]
+}
