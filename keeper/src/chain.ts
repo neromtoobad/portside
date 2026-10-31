@@ -51,13 +51,19 @@ export interface Sent {
   events: { section: string; method: string; data: unknown }[];
 }
 
+const nonces = new Map<string, number>();
+
 /**
  * Signs, submits and waits for inclusion. Rejects with the decoded dispatch error.
  * `feeAsset` pays the fee in a game asset through ChargeAssetTxPayment.
  */
-export function send(api: ApiPromise, tx: SubmittableExtrinsic<'promise'>, signer: KeyringPair, feeAsset?: number): Promise<Sent> {
+export async function send(api: ApiPromise, tx: SubmittableExtrinsic<'promise'>, signer: KeyringPair, feeAsset?: number): Promise<Sent> {
+  // accountNextIndex can lag right after inclusion (seen on Chopsticks), so keep our own count.
+  const onChain = ((await api.query.system.account(signer.address)) as any).nonce.toNumber();
+  const nonce = Math.max(onChain, nonces.get(signer.address) ?? 0);
+  nonces.set(signer.address, nonce + 1);
   return new Promise((resolve, reject) => {
-    const opts = feeAsset === undefined ? {} : { assetId: withId(feeAsset) };
+    const opts = { nonce, ...(feeAsset === undefined ? {} : { assetId: withId(feeAsset) }) };
     tx.signAndSend(signer, opts, ({ status, events, dispatchError, txHash }) => {
       if (dispatchError) {
         if (dispatchError.isModule) {

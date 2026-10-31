@@ -35,11 +35,11 @@ export async function pushPrice(api: ApiPromise, house: KeyringPair, goodId: num
   if (factor > 1) {
     const amountIn = BigInt(Math.floor((Number(r.ducat) * (s - 1)) / LP_FEE));
     await ensureBalance(api, house, DUCAT, amountIn);
-    return send(api, api.tx.assetConversion.swapExactTokensForTokens([withId(DUCAT), withId(goodId)], amountIn, 0, house.address, true), house);
+    return send(api, api.tx.assetConversion.swapExactTokensForTokens([withId(DUCAT), withId(goodId)], amountIn, 1, house.address, true), house);
   }
   const amountIn = BigInt(Math.floor((Number(r.goods) * (1 / s - 1)) / LP_FEE));
   await ensureBalance(api, house, goodId, amountIn);
-  return send(api, api.tx.assetConversion.swapExactTokensForTokens([withId(goodId), withId(DUCAT)], amountIn, 0, house.address, true), house);
+  return send(api, api.tx.assetConversion.swapExactTokensForTokens([withId(goodId), withId(DUCAT)], amountIn, 1, house.address, true), house);
 }
 
 /** The house is the asset owner, so it can always mint what it needs to move a market. */
