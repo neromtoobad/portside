@@ -23,7 +23,9 @@ export const API = import.meta.env.VITE_API ?? '';
 export async function getState(): Promise<HarbourState> {
   const r = await fetch(`${API}/api/state`);
   if (!r.ok) throw new Error(`harbour office unreachable (${r.status})`);
-  return r.json();
+  const s = await r.json();
+  if (!Array.isArray(s?.goods) || !Array.isArray(s?.leaderboard)) throw new Error('harbour office sent an unexpected reply');
+  return s;
 }
 
 export async function getPlayer(address: string): Promise<Player> {

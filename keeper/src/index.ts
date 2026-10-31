@@ -17,7 +17,7 @@ const STARTER_DUCAT = Number(process.env.STARTER_DUCAT ?? 1000);
 const STARTER_POT_CENTS = BigInt(process.env.STARTER_POT_CENTS ?? 20);
 const DATA_DIR = process.env.DATA_DIR ?? '.data';
 const CHAIN_HTTP = process.env.CHAIN_HTTP ?? CHAIN_WS.replace(/^ws/, 'http');
-const PORT = Number(process.env.PORT ?? 8787);
+const PORT = Number(process.env.PORT ?? 8790);
 
 interface Trade { address: string; hash: string; block: number; t: number; from: number; to: number; amountIn: number; amountOut: number }
 interface State {
