@@ -6,7 +6,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { decodeAddress } from '@polkadot/util-crypto';
 import { keccak256, toUtf8Bytes } from 'ethers';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { connect, keeperPair, send, DUCAT, GOODS, POT, UNIT, toUnits, fromUnits, CHAIN_WS } from './chain.js';
+import { connect, keeperPair, send, DUCAT, GOODS, POT, UNIT, toUnits, fromUnits, CHAIN_WS, ON_FORK } from './chain.js';
 import { allPrices, pushPrice, netWorths } from './market.js';
 import { EventDrawer, describe, type HarbourEvent } from './events.js';
 
@@ -41,6 +41,7 @@ interface State {
   anchors: { day: string; root: string; proof: string; players: number }[];
   lastBlock: number;
   day: string;
+  drawer?: { season: number; round: number; seed: string };
 }
 
 mkdirSync(DATA_DIR, { recursive: true });
@@ -48,12 +49,20 @@ const file = `${DATA_DIR}/state.json`;
 const state: State = existsSync(file)
   ? JSON.parse(readFileSync(file, 'utf8'))
   : { season: 0, roundStartedAt: 0, dockAt: 0, revertAt: 0, events: [], history: {}, players: {}, leaderboard: [], trades: [], anchors: [], lastBlock: 0, day: '' };
-const save = () => writeFileSync(file, JSON.stringify(state));
-
 const api = await connect();
 const keeper = keeperPair();
 const drawer = new EventDrawer(api, keeper);
 drawer.season = state.season;
+drawer.restore(state.drawer);
+// A state file from before seeds were saved can't reveal its last commit: open a fresh season.
+let needsCommit = !state.drawer && state.season > 0;
+const save = () => {
+  state.drawer = drawer.snapshot();
+  writeFileSync(file, JSON.stringify(state));
+};
+/** JSON has no Infinity, so "already settled this round" is a far-future timestamp. */
+const NEVER = Number.MAX_SAFE_INTEGER;
+state.revertAt ??= NEVER;
 let prices: Awaited<ReturnType<typeof allPrices>> = {};
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -68,8 +77,9 @@ const enqueue = <T>(fn: () => Promise<T>) => {
 // ---- harbour clock -------------------------------------------------------
 
 async function openRound() {
-  if (!state.season || drawer.season !== state.season) {
+  if (!state.season || drawer.season !== state.season || needsCommit) {
     await enqueue(() => drawer.openSeason());
+    needsCommit = false;
     state.season = drawer.season;
     log('season', state.season, 'opened via', drawer.mode);
   }
@@ -81,7 +91,7 @@ async function openRound() {
   state.dockAt = now + DOCK_SECONDS * 1000;
   state.revertAt = now + (ROUND_SECONDS * 1000) / 2;
   const d = describe(ev);
-  log(`round ${ev.round}: ${d.title} / ${d.good} ${d.dir > 0 ? '+' : d.dir < 0 ? '-' : ''}${d.magnitude}% (${ev.proof.slice(0, 12)})`);
+  log(`round ${ev.round}: ${d.title} / ${d.goodName} ${d.dir > 0 ? '+' : d.dir < 0 ? '-' : ''}${d.magnitude}% (${ev.proof.slice(0, 12)})`);
   save();
 }
 
@@ -92,13 +102,13 @@ async function dock() {
   const sent = await enqueue(() => pushPrice(api, keeper, GOODS[ev.good].id, factor));
   ev.docked = true;
   ev.dockProof = sent.hash;
-  log(`docked: ${kind.good} x${factor.toFixed(2)}`);
+  log(`docked: ${kind.goodName} x${factor.toFixed(2)}`);
   save();
 }
 
 /** Halfway through a round every market drifts a quarter of the way back to its base price. */
 async function settleTide() {
-  state.revertAt = Infinity;
+  state.revertAt = NEVER;
   for (const g of GOODS) {
     const p = prices[g.id]?.price;
     if (!p) continue;
@@ -287,10 +297,20 @@ app.post('/api/register', async (c) => {
 /** The browser talks to the chain through here: the testnet's wss drops large frames, HTTPS does not. */
 const RPC_ALLOW = /^(chain_|state_(getMetadata|getRuntimeVersion|getStorage|call|queryStorageAt)|system_(chain|properties|accountNextIndex|version|name)|author_submitExtrinsic|payment_queryInfo|rpc_methods)/;
 app.post('/api/rpc', async (c) => {
-  const body = await c.req.json<{ method: string }>();
-  if (!RPC_ALLOW.test(body.method)) return c.json({ jsonrpc: '2.0', id: (body as any).id, error: { code: -32601, message: 'method not allowed' } });
-  const res = await fetch(CHAIN_HTTP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  return c.body(await res.text(), 200, { 'content-type': 'application/json' });
+  const body = await c.req.json<{ method: string; id: unknown; params?: unknown[] }>();
+  if (!RPC_ALLOW.test(body.method)) return c.json({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: 'method not allowed' } });
+  const { id, params } = body;
+  try {
+    // Chopsticks' HTTP replies trip Node's strict parser, so on the fork reuse the keeper's socket.
+    if (ON_FORK && !process.env.CHAIN_HTTP) {
+      const result = await (api as any)._rpcCore.provider.send(body.method, params ?? []);
+      return c.json({ jsonrpc: '2.0', id, result });
+    }
+    const res = await fetch(CHAIN_HTTP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    return c.body(await res.text(), 200, { 'content-type': 'application/json' });
+  } catch (e) {
+    return c.json({ jsonrpc: '2.0', id, error: { code: -32603, message: (e as Error).message } });
+  }
 });
 
 app.get('/healthz', (c) => c.text('ok'));

@@ -72,6 +72,10 @@ export async function send(api: ApiPromise, tx: SubmittableExtrinsic<'promise'>,
         }
         return reject(new Error(dispatchError.toString()));
       }
+      if (status.isInvalid || status.isDropped || status.isUsurped) {
+        nonces.delete(signer.address);
+        return reject(new Error(`transaction ${status.type.toLowerCase()}`));
+      }
       if (status.isInBlock) {
         resolve({
           hash: txHash.toHex(),

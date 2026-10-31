@@ -68,6 +68,15 @@ export class EventDrawer {
 
   get mode() { return this.contract ? 'contract' : 'remark'; }
 
+  /** The unrevealed seed has to survive a restart, or the next reveal won't match its commit. */
+  snapshot() { return { season: this.season, round: this.round, seed: this.seed }; }
+  restore(s?: { season: number; round: number; seed: string }) {
+    if (!s) return;
+    this.season = s.season;
+    this.round = s.round;
+    this.seed = s.seed;
+  }
+
   async openSeason() {
     this.seed = newSeed();
     if (this.contract) {
@@ -108,5 +117,5 @@ export class EventDrawer {
 export const describe = (e: Pick<HarbourEvent, 'good' | 'kind' | 'magnitude'>) => {
   const k = KINDS[e.kind];
   const g = GOODS[e.good];
-  return { title: k.name, good: g.name, line: k.line, dir: k.dir, magnitude: e.magnitude };
+  return { title: k.name, goodName: g.name, line: k.line, dir: k.dir, magnitude: e.magnitude };
 };
