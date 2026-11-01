@@ -96,10 +96,10 @@ function Onboard({ address, onJoin, busy, error, feeMode }: { address: string; o
       <form className="panel onboard" onSubmit={(e) => { e.preventDefault(); onJoin(name); }}>
         <img className="onboard-face" src={captainArt(address)} alt="Your captain" />
         <h2>Sign the harbour register</h2>
-        <p>You get <b>1,000 DUCAT</b> to invest in the port's five trading companies, and a wallet that lives in this browser. Every trade is a real swap on Portaldot's DEX, and {feeMode === 'native' ? 'the harbour covers your network fees' : 'network fees are paid in DUCAT'}.</p>
+        <p>You get <b>1,000 DUCAT</b> to trade Nvidia, Apple, Tesla, Amazon and Meta shares, and a wallet that lives in this browser. Every trade is a real swap on Portaldot's DEX, and {feeMode === 'native' ? 'the harbour covers your network fees' : 'network fees are paid in DUCAT'}.</p>
         <ol className="steps">
-          <li><b>Read the news.</b> Each round a ship brings news about one trading company.</li>
-          <li><b>Trade before it docks.</b> When it lands, that company's share price jumps or sinks by the posted amount.</li>
+          <li><b>Read the news.</b> Each round a ship brings news about one stock.</li>
+          <li><b>Trade before it docks.</b> When it lands, its share price jumps or sinks by the posted amount.</li>
           <li><b>Sell into the move.</b> Highest net worth tops the captains' board.</li>
         </ol>
         <label>Captain's name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={18} placeholder="e.g. Marlowe" autoFocus /></label>
@@ -157,7 +157,7 @@ function TradeDrawer({ good, initialSide, state, player, pair, onClose, onTraded
           <img src={CARGO[good.symbol]} alt="" />
           <div>
             <h3>{good.name}</h3>
-            <span className="muted"><b className="tkr">{good.symbol}</b> {good.cargo && `${good.cargo} trader · `}{fmt(pool?.price ?? 0, priceDigits(pool?.price ?? 0))} DUCAT a share</span>
+            <span className="muted"><b className="tkr">{good.symbol}</b> {fmt(pool?.price ?? 0, priceDigits(pool?.price ?? 0))} DUCAT a share</span>
           </div>
           <button className="x" onClick={onClose} aria-label="Close">×</button>
         </header>
@@ -541,9 +541,10 @@ export default function App() {
 
         <footer className="foot">
           <button className="link" onClick={() => setHowto(true)}>How to play</button>
-          <span>Wallet {short(pair.address)}</span>
+          <span className="foot-wide">Wallet {short(pair.address)}</span>
           <button className="link" onClick={() => { navigator.clipboard?.writeText(mnemonic); alert('Recovery phrase copied. Keep it somewhere safe.'); }}>Copy recovery phrase</button>
-          <span>{state.mode === 'contract' ? 'News drawn by the Harbour contract' : 'News drawn with on-chain commit-reveal'} · every share price is a live pool on Portaldot V3</span>
+          <span className="foot-wide">{state.mode === 'contract' ? 'News drawn by the Harbour contract' : 'News drawn on-chain'} · live pools on Portaldot V3</span>
+          <span>Game prices, not market data</span>
         </footer>
       </div>
 
@@ -553,8 +554,8 @@ export default function App() {
             <img className="onboard-face" src="/art/ship.webp" alt="" />
             <h2>How to play</h2>
             <ol className="steps">
-              <li><b>Read the news.</b> Each round a ship brings news about one trading company.</li>
-              <li><b>Trade before it docks.</b> When it lands, that company's share price jumps or sinks by the posted amount.</li>
+              <li><b>Read the news.</b> Each round a ship brings news about one stock.</li>
+              <li><b>Trade before it docks.</b> When it lands, its share price jumps or sinks by the posted amount.</li>
               <li><b>Sell into the move.</b> Highest net worth tops the captains' board.</li>
             </ol>
             <button className="btn go wide" onClick={() => setHowto(false)}>Back to the harbour</button>

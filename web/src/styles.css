@@ -106,9 +106,11 @@ b, .p, .val, dd { font-variant-numeric: tabular-nums; }
 @keyframes bob { 50% { transform: translateY(2%); } }
 .ship.escort { position: absolute; width: 6.2cqw; transform: translate(-50%, -100%); z-index: 1; opacity: 0.96; transition: left 0.3s linear, top 0.3s linear; animation: rock 2.9s ease-in-out infinite; }
 .omen { position: absolute; pointer-events: none; filter: drop-shadow(0 0.4cqw 0.5cqw rgba(0, 0, 0, 0.2)); }
-.omen.k0 { width: 78%; left: 4%; top: -34%; animation: drift 3s ease-in-out infinite; }
+/* Earnings trophy and fund money ride on deck; the launch rocket and the storm cloud hang above. */
+.omen.k0 { width: 40%; left: 40%; top: 30%; animation: bob 2.2s ease-in-out infinite; }
+.omen.k1 { width: 40%; left: 58%; top: -48%; animation: drift 2.6s ease-in-out infinite; }
 .omen.k2 { width: 46%; left: 42%; top: 38%; animation: bob 2s ease-in-out infinite; }
-.omen.k3 { width: 42%; left: 40%; top: 36%; animation: bob 2.4s ease-in-out infinite; }
+.omen.k3 { width: 78%; left: 4%; top: -34%; animation: drift 3s ease-in-out infinite; }
 @keyframes drift { 50% { transform: translateX(6%); } }
 .debris { position: absolute; width: 5cqw; transform: translate(-50%, -50%); animation: bob 3s ease-in-out infinite; z-index: 1; pointer-events: none; }
 .splash {
@@ -278,6 +280,7 @@ b, .p, .val, dd { font-variant-numeric: tabular-nums; }
   .purse .who { display: none; }
   .crate-head img { width: 42px; height: 42px; }
   .crate-head .p { font-size: 18px; }
+  .foot-wide { display: none; }
 }
 @media (max-height: 760px) and (min-width: 761px) {
   .captains { max-height: calc(100dvh - 92px - 180px); }

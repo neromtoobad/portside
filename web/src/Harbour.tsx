@@ -120,10 +120,9 @@ export function Harbour({ state, player, now, onPick, crowd, pops }: {
             ))}
             <div className={`ship-wrap ${moored ? 'moored' : 'sailing'}`} style={{ left: `${ship[0]}%`, top: `${ship[1]}%`, ['--s' as string]: 0.72 + 0.28 * ease(t) }}>
               <img className="ship" src="/art/ship.webp" alt={`Ship bringing news about ${state.goods[target]?.name}`} />
-              {[0, 2, 3].includes(ev.kind) && <img className={`omen k${ev.kind}`} src={KIND_ART[ev.kind]} alt="" />}
+              {ev.kind < 4 && <img className={`omen k${ev.kind}`} src={KIND_ART[ev.kind]} alt="" />}
               {final !== undefined && <span key={final} className={`count ${final <= 3 ? 'is-urgent' : ''}`}>{final}</span>}
             </div>
-            {ev.kind === 1 && <img className="debris" src={KIND_ART[1]} alt="" style={{ left: `${pier!.berth[0] + 6}%`, top: `${pier!.berth[1] - 12}%` }} />}
             {splash !== undefined && <span className="splash" style={{ left: `${pier!.berth[0]}%`, top: `${pier!.berth[1]}%` }} />}
           </>
         )}

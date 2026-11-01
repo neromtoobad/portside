@@ -17,12 +17,12 @@ export const UNIT = 10n ** 10n;
 const ASSET_BASE = Number(process.env.ASSET_BASE ?? 8_801_000);
 export const DUCAT = ASSET_BASE;
 export const GOODS = [
-  // Five harbour trading companies, one per cargo. Shares trade against DUCAT.
-  { id: ASSET_BASE + 1, symbol: 'BEAN', name: 'Golden Bean', cargo: 'coffee', basePrice: 12 },
-  { id: ASSET_BASE + 2, symbol: 'SAFF', name: 'Saffron & Sons', cargo: 'spice', basePrice: 30 },
-  { id: ASSET_BASE + 3, symbol: 'JADE', name: 'Jade Silk', cargo: 'silk', basePrice: 55 },
-  { id: ASSET_BASE + 4, symbol: 'CLIF', name: 'White Cliffs', cargo: 'salt', basePrice: 4 },
-  { id: ASSET_BASE + 5, symbol: 'REDH', name: 'Red Hill', cargo: 'copper', basePrice: 20 },
+  // Five well-known stocks, each arriving as its own cargo. Prices are the game's own pools in DUCAT, not market data.
+  { id: ASSET_BASE + 1, symbol: 'NVDA', name: 'Nvidia', cargo: 'chips', basePrice: 12 },
+  { id: ASSET_BASE + 2, symbol: 'AAPL', name: 'Apple', cargo: 'phones', basePrice: 30 },
+  { id: ASSET_BASE + 3, symbol: 'TSLA', name: 'Tesla', cargo: 'cars', basePrice: 55 },
+  { id: ASSET_BASE + 4, symbol: 'AMZN', name: 'Amazon', cargo: 'parcels', basePrice: 4 },
+  { id: ASSET_BASE + 5, symbol: 'META', name: 'Meta', cargo: 'headsets', basePrice: 20 },
 ] as const;
 
 export const native = 'Native' as const;

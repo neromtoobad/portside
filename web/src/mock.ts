@@ -3,16 +3,16 @@
 import type { HarbourState, Player } from './api';
 
 const GOODS = [
-  { id: 8801001, symbol: 'BEAN', name: 'Golden Bean', cargo: 'coffee', basePrice: 12 },
-  { id: 8801002, symbol: 'SAFF', name: 'Saffron & Sons', cargo: 'spice', basePrice: 30 },
-  { id: 8801003, symbol: 'JADE', name: 'Jade Silk', cargo: 'silk', basePrice: 55 },
-  { id: 8801004, symbol: 'CLIF', name: 'White Cliffs', cargo: 'salt', basePrice: 4 },
-  { id: 8801005, symbol: 'REDH', name: 'Red Hill', cargo: 'copper', basePrice: 20 },
+  { id: 8801001, symbol: 'NVDA', name: 'Nvidia', cargo: 'chips', basePrice: 12 },
+  { id: 8801002, symbol: 'AAPL', name: 'Apple', cargo: 'phones', basePrice: 30 },
+  { id: 8801003, symbol: 'TSLA', name: 'Tesla', cargo: 'cars', basePrice: 55 },
+  { id: 8801004, symbol: 'AMZN', name: 'Amazon', cargo: 'parcels', basePrice: 4 },
+  { id: 8801005, symbol: 'META', name: 'Meta', cargo: 'headsets', basePrice: 20 },
 ];
 const KINDS = [
-  ['Rivals stormbound', 'rival fleets held offshore, its ships land first', 1], ['Treasure salvaged', 'divers raised a lost cargo from the reef', 1],
-  ['Guild buyout', "the merchants' guild is buying up shares", 1], ['Warehouse glut', 'unsold cargo piling up on the quay', -1],
-  ['Rival fleet', 'three rival ships dropped anchor', -1], ['Calm seas', 'a quiet day on the exchange', 0],
+  ['Earnings beat', 'profits landed well above forecast', 1], ['Launch sell-out', 'the new product is flying off the shelves', 1],
+  ['Whale buying', 'a big fund is scooping up shares', 1], ['Supply storm', 'shipments stuck behind a storm at sea', -1],
+  ['Rival fleet', 'competitors flooded the port with cheaper stock', -1], ['Calm seas', 'a quiet day on the exchange', 0],
 ] as const;
 // ?mock&fast runs short rounds for testing the dock moment.
 const FAST = typeof location !== 'undefined' && new URLSearchParams(location.search).has('fast');

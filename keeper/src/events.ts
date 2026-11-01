@@ -5,11 +5,11 @@ import { GOODS, send } from './chain.js';
 
 /** Same table as Harbour.sol: kinds 0-2 push a company's shares up, 3-4 push them down, 5 is a quiet round. */
 export const KINDS = [
-  { name: 'Rivals stormbound', line: 'rival fleets held offshore, its ships land first', dir: 1 },
-  { name: 'Treasure salvaged', line: 'divers raised a lost cargo from the reef', dir: 1 },
-  { name: 'Guild buyout', line: 'the merchants\' guild is buying up shares', dir: 1 },
-  { name: 'Warehouse glut', line: 'unsold cargo piling up on the quay', dir: -1 },
-  { name: 'Rival fleet', line: 'three rival ships dropped anchor', dir: -1 },
+  { name: 'Earnings beat', line: 'profits landed well above forecast', dir: 1 },
+  { name: 'Launch sell-out', line: 'the new product is flying off the shelves', dir: 1 },
+  { name: 'Whale buying', line: 'a big fund is scooping up shares', dir: 1 },
+  { name: 'Supply storm', line: 'shipments stuck behind a storm at sea', dir: -1 },
+  { name: 'Rival fleet', line: 'competitors flooded the port with cheaper stock', dir: -1 },
   { name: 'Calm seas', line: 'a quiet day on the exchange', dir: 0 },
 ] as const;
 

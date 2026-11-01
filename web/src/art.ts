@@ -1,5 +1,5 @@
 // Where things sit on the harbour scene (public/art/scene.webp, 2688×1520), in % of its width and height.
-// Measured from the render; piers run left to right in the same order as the companies.
+// Measured from the render; piers run left to right in the same order as the stocks.
 export const SCENE = { w: 2688, h: 1520 };
 
 export interface Pier {
@@ -22,13 +22,13 @@ export const PIERS: Pier[] = [
 /** Ships appear past the top edge, a little to the right of their pier, and sail down onto the quay. */
 export const horizonFor = (berth: [number, number]): [number, number] => [berth[0] + 10, -14];
 
-/** Each company's cargo, by ticker. */
+/** Each stock's cargo, by ticker. */
 export const CARGO: Record<string, string> = {
-  BEAN: '/art/coffee.webp', SAFF: '/art/spice.webp', JADE: '/art/silk.webp', CLIF: '/art/salt.webp', REDH: '/art/copper.webp',
+  NVDA: '/art/chips.webp', AAPL: '/art/phones.webp', TSLA: '/art/car.webp', AMZN: '/art/parcels.webp', META: '/art/headset.webp',
 };
 
 /** One sprite per event kind, in the same order as Harbour.sol's table. */
-export const KIND_ART = ['/art/storm.webp', '/art/wreck.webp', '/art/guild.webp', '/art/harvest.webp', '/art/ship.webp', '/art/sun.webp'];
+export const KIND_ART = ['/art/trophy.webp', '/art/rocket.webp', '/art/guild.webp', '/art/cloud.webp', '/art/ship.webp', '/art/sun.webp'];
 
 /** A captain's face comes from their address, so everyone sees the same one. */
 export function captainArt(address: string) {
