@@ -3,14 +3,14 @@ import type { ApiPromise } from '@polkadot/api';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { GOODS, send } from './chain.js';
 
-/** Same table as Harbour.sol: kinds 0-2 push a good up, 3-4 push it down, 5 is a quiet round. */
+/** Same table as Harbour.sol: kinds 0-2 push a company's shares up, 3-4 push them down, 5 is a quiet round. */
 export const KINDS = [
-  { name: 'Storm at sea', line: 'ships held offshore', dir: 1 },
-  { name: 'Shipwreck', line: 'cargo lost on the reef', dir: 1 },
-  { name: 'Guild buyout', line: 'merchants buying it all up', dir: 1 },
-  { name: 'Bumper harvest', line: 'holds full to the brim', dir: -1 },
-  { name: 'Glut', line: 'too many ships in port', dir: -1 },
-  { name: 'Calm seas', line: 'nothing to report', dir: 0 },
+  { name: 'Rivals stormbound', line: 'rival fleets held offshore, its ships land first', dir: 1 },
+  { name: 'Treasure salvaged', line: 'divers raised a lost cargo from the reef', dir: 1 },
+  { name: 'Guild buyout', line: 'the merchants\' guild is buying up shares', dir: 1 },
+  { name: 'Warehouse glut', line: 'unsold cargo piling up on the quay', dir: -1 },
+  { name: 'Rival fleet', line: 'three rival ships dropped anchor', dir: -1 },
+  { name: 'Calm seas', line: 'a quiet day on the exchange', dir: 0 },
 ] as const;
 
 export interface HarbourEvent {

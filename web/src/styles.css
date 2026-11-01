@@ -409,3 +409,9 @@ b, .p, .val, dd { font-variant-numeric: tabular-nums; }
   @keyframes shake-m { 20%, 60% { transform: translate(5px, 1px); } 40%, 80% { transform: translate(-5px, -1px); } }
 }
 .is-miss .result-card > b { font-size: 38px; }
+
+/* ---------- tickers ---------- */
+.tkr { font: 700 0.78em var(--mono); font-style: normal; letter-spacing: 0.02em; color: var(--sea-deep); background: #e3f4f8; border-radius: 6px; padding: 1px 5px; }
+.crate-head b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 600; color: var(--muted); }
+.crate-head .sym { font: 700 13.5px var(--mono); font-style: normal; color: var(--ink); }
+.bubble small { font-family: var(--mono); letter-spacing: 0.04em; }

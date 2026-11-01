@@ -87,7 +87,7 @@ export function Harbour({ state, player, now, onPick, crowd, pops }: {
                 onClick={() => onPick(g.id)}
                 aria-label={`Trade ${g.name}`}
               >
-                <small>{g.name}</small>
+                <small>{g.symbol}</small>
                 <b>{fmt(price, price < 10 ? 3 : 2)}</b>
                 <i>{ch >= 0 ? '▲' : '▼'}{fmt(Math.abs(ch), 1)}%</i>
                 {held >= 0.005 && <em>you {fmt(held, held < 10 ? 2 : 1)}</em>}

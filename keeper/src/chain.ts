@@ -17,11 +17,12 @@ export const UNIT = 10n ** 10n;
 const ASSET_BASE = Number(process.env.ASSET_BASE ?? 8_801_000);
 export const DUCAT = ASSET_BASE;
 export const GOODS = [
-  { id: ASSET_BASE + 1, symbol: 'COFFEE', name: 'Coffee', basePrice: 12 },
-  { id: ASSET_BASE + 2, symbol: 'SPICE', name: 'Spice', basePrice: 30 },
-  { id: ASSET_BASE + 3, symbol: 'SILK', name: 'Silk', basePrice: 55 },
-  { id: ASSET_BASE + 4, symbol: 'SALT', name: 'Salt', basePrice: 4 },
-  { id: ASSET_BASE + 5, symbol: 'COPPER', name: 'Copper', basePrice: 20 },
+  // Five harbour trading companies, one per cargo. Shares trade against DUCAT.
+  { id: ASSET_BASE + 1, symbol: 'BEAN', name: 'Golden Bean', cargo: 'coffee', basePrice: 12 },
+  { id: ASSET_BASE + 2, symbol: 'SAFF', name: 'Saffron & Sons', cargo: 'spice', basePrice: 30 },
+  { id: ASSET_BASE + 3, symbol: 'JADE', name: 'Jade Silk', cargo: 'silk', basePrice: 55 },
+  { id: ASSET_BASE + 4, symbol: 'CLIF', name: 'White Cliffs', cargo: 'salt', basePrice: 4 },
+  { id: ASSET_BASE + 5, symbol: 'REDH', name: 'Red Hill', cargo: 'copper', basePrice: 20 },
 ] as const;
 
 export const native = 'Native' as const;

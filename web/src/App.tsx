@@ -96,10 +96,10 @@ function Onboard({ address, onJoin, busy, error, feeMode }: { address: string; o
       <form className="panel onboard" onSubmit={(e) => { e.preventDefault(); onJoin(name); }}>
         <img className="onboard-face" src={captainArt(address)} alt="Your captain" />
         <h2>Sign the harbour register</h2>
-        <p>You get a warehouse, <b>1,000 DUCAT</b> and a wallet that lives in this browser. Every trade is a real swap on Portaldot's DEX, and {feeMode === 'native' ? 'the harbour covers your network fees' : 'network fees are paid in DUCAT'}.</p>
+        <p>You get <b>1,000 DUCAT</b> to invest in the port's five trading companies, and a wallet that lives in this browser. Every trade is a real swap on Portaldot's DEX, and {feeMode === 'native' ? 'the harbour covers your network fees' : 'network fees are paid in DUCAT'}.</p>
         <ol className="steps">
-          <li><b>Read the news.</b> Each round a ship brings news about one good.</li>
-          <li><b>Trade before it docks.</b> When it lands, that price jumps or sinks by the posted amount.</li>
+          <li><b>Read the news.</b> Each round a ship brings news about one trading company.</li>
+          <li><b>Trade before it docks.</b> When it lands, that company's share price jumps or sinks by the posted amount.</li>
           <li><b>Sell into the move.</b> Highest net worth tops the captains' board.</li>
         </ol>
         <label>Captain's name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={18} placeholder="e.g. Marlowe" autoFocus /></label>
@@ -157,7 +157,7 @@ function TradeDrawer({ good, initialSide, state, player, pair, onClose, onTraded
           <img src={CARGO[good.symbol]} alt="" />
           <div>
             <h3>{good.name}</h3>
-            <span className="muted">{fmt(pool?.price ?? 0, priceDigits(pool?.price ?? 0))} DUCAT each</span>
+            <span className="muted"><b className="tkr">{good.symbol}</b> {good.cargo && `${good.cargo} trader · `}{fmt(pool?.price ?? 0, priceDigits(pool?.price ?? 0))} DUCAT a share</span>
           </div>
           <button className="x" onClick={onClose} aria-label="Close">×</button>
         </header>
@@ -171,12 +171,12 @@ function TradeDrawer({ good, initialSide, state, player, pair, onClose, onTraded
           <button className={side === 'sell' ? 'on sell' : ''} onClick={() => { setSide('sell'); setAmount(''); }}>Sell</button>
         </div>
         <label className="amount">
-          <span>{side === 'buy' ? 'Spend DUCAT' : `Sell ${good.name}`}</span>
+          <span>{side === 'buy' ? 'Spend DUCAT' : `Sell ${good.symbol} shares`}</span>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" />
         </label>
         <div className="chips">
           {chips.map((c, i) => <button key={i} onClick={() => setAmount(String(Math.min(c, max)))} disabled={max <= 0}>{side === 'buy' ? c : ['¼', '½', 'All'][i]}</button>)}
-          <span className="muted">{side === 'buy' ? `purse ${fmt(purse)}` : `held ${fmt(held, 3)}`}</span>
+          <span className="muted">{side === 'buy' ? `purse ${fmt(purse)}` : `${fmt(held, 3)} shares`}</span>
         </div>
         <PriceChart
           points={state.history[good.id] ?? []}
@@ -184,12 +184,12 @@ function TradeDrawer({ good, initialSide, state, player, pair, onClose, onTraded
           color={(state.prices[good.id]?.price ?? 0) >= good.basePrice ? '#13a864' : '#f0524f'}
         />
         <dl className="quote">
-          <div><dt>You get about</dt><dd>{fmt(out, side === 'buy' ? 3 : 2)} {side === 'buy' ? good.symbol : 'DUCAT'}</dd></div>
+          <div><dt>You get about</dt><dd>{fmt(out, side === 'buy' ? 3 : 2)} {side === 'buy' ? `${good.symbol} shares` : 'DUCAT'}</dd></div>
           <div><dt>Price impact</dt><dd className={impact > 3 ? 'warn' : ''}>{fmt(impact, 2)}%</dd></div>
           <div><dt>Network fee</dt><dd>{state.feeMode === 'native' ? 'covered by the harbour' : 'paid in DUCAT'}</dd></div>
         </dl>
         <button className={`btn wide ${side === 'buy' ? 'go' : 'stop'}`} disabled={n <= 0 || n > max || status.kind === 'busy'} onClick={submit}>
-          {status.kind === 'busy' ? status.text : `${side === 'buy' ? 'Buy' : 'Sell'} ${good.name}`}
+          {status.kind === 'busy' ? status.text : `${side === 'buy' ? 'Buy' : 'Sell'} ${good.symbol}`}
         </button>
         {status.kind === 'done' && <a className="ok" href={explorer(status.hash)} target="_blank" rel="noreferrer">Sent to Portaldot · {status.hash.slice(0, 12)}…</a>}
         {status.kind === 'error' && <p className="error">{status.text}</p>}
@@ -251,10 +251,10 @@ function DockResult({ r, captain, address, rank, onClose }: { r: Result; captain
         <p className="detail">{r.title} · {move}</p>
         <b className={good ? 'up' : r.outcome === 'loss' ? 'down' : ''}>{amount}{r.outcome !== 'miss' && <i> DUCAT</i>}</b>
         <p className="sub">{{
-          win: 'You were holding when it landed.',
-          dodge: 'You sold before it landed.',
-          loss: 'You were holding when it landed. Sell before the next one.',
-          miss: 'No cargo aboard. Buy before the next ship docks.',
+          win: 'You held shares when the news landed.',
+          dodge: 'You sold your shares before it landed.',
+          loss: 'You held shares when it landed. Sell before the next one.',
+          miss: 'You held no shares. Buy before the next ship docks.',
         }[r.outcome]}</p>
         {r.streak >= 2 && r.outcome === 'win' && <span className="streak big"><Flame /> {r.streak} calls in a row</span>}
         <div className="result-btns">
@@ -528,7 +528,7 @@ export default function App() {
                 {news && <span className={`tag ${ev!.dir > 0 ? 'up' : 'down'}`}>{ev!.docked ? 'Docked' : 'News'} {ev!.dir > 0 ? '▲' : '▼'}{ev!.magnitude}%</span>}
                 <button className="crate-head" onClick={() => setPicked({ id: g.id, side: 'buy' })}>
                   <img src={CARGO[g.symbol]} alt="" />
-                  <span><b>{g.name}</b><span className="p">{fmt(p, priceDigits(p))}</span><small className={ch >= 0 ? 'up' : 'down'}>{ch >= 0 ? '▲' : '▼'}{fmt(Math.abs(ch), 1)}%{held >= 0.005 ? ` · you ${fmt(held, held < 10 ? 2 : 1)}` : ''}</small></span>
+                  <span><b title={g.name}><i className="sym">{g.symbol}</i> {g.name}</b><span className="p">{fmt(p, priceDigits(p))}</span><small className={ch >= 0 ? 'up' : 'down'}>{ch >= 0 ? '▲' : '▼'}{fmt(Math.abs(ch), 1)}%{held >= 0.005 ? ` · you ${fmt(held, held < 10 ? 2 : 1)}` : ''}</small></span>
                 </button>
                 <div className="crate-btns">
                   <button className="btn go" onClick={() => setPicked({ id: g.id, side: 'buy' })}>Buy</button>
@@ -543,7 +543,7 @@ export default function App() {
           <button className="link" onClick={() => setHowto(true)}>How to play</button>
           <span>Wallet {short(pair.address)}</span>
           <button className="link" onClick={() => { navigator.clipboard?.writeText(mnemonic); alert('Recovery phrase copied. Keep it somewhere safe.'); }}>Copy recovery phrase</button>
-          <span>{state.mode === 'contract' ? 'News drawn by the Harbour contract' : 'News drawn with on-chain commit-reveal'} · every price is a live pool on Portaldot V3</span>
+          <span>{state.mode === 'contract' ? 'News drawn by the Harbour contract' : 'News drawn with on-chain commit-reveal'} · every share price is a live pool on Portaldot V3</span>
         </footer>
       </div>
 
@@ -553,8 +553,8 @@ export default function App() {
             <img className="onboard-face" src="/art/ship.webp" alt="" />
             <h2>How to play</h2>
             <ol className="steps">
-              <li><b>Read the news.</b> Each round a ship brings news about one good.</li>
-              <li><b>Trade before it docks.</b> When it lands, that price jumps or sinks by the posted amount.</li>
+              <li><b>Read the news.</b> Each round a ship brings news about one trading company.</li>
+              <li><b>Trade before it docks.</b> When it lands, that company's share price jumps or sinks by the posted amount.</li>
               <li><b>Sell into the move.</b> Highest net worth tops the captains' board.</li>
             </ol>
             <button className="btn go wide" onClick={() => setHowto(false)}>Back to the harbour</button>

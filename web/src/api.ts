@@ -1,4 +1,5 @@
-export interface Good { id: number; symbol: string; name: string; basePrice: number }
+/** A harbour trading company; `symbol` is its ticker and `cargo` the trade it runs. */
+export interface Good { id: number; symbol: string; name: string; cargo?: string; basePrice: number }
 export interface HarbourEvent {
   season: number; round: number; good: number; kind: number; magnitude: number;
   entropy: string; proof: string; source: 'contract' | 'remark';

@@ -1,5 +1,5 @@
 // Where things sit on the harbour scene (public/art/scene.webp, 2688×1520), in % of its width and height.
-// Measured from the render; piers run left to right in the same order as the goods.
+// Measured from the render; piers run left to right in the same order as the companies.
 export const SCENE = { w: 2688, h: 1520 };
 
 export interface Pier {
@@ -22,8 +22,9 @@ export const PIERS: Pier[] = [
 /** Ships appear past the top edge, a little to the right of their pier, and sail down onto the quay. */
 export const horizonFor = (berth: [number, number]): [number, number] => [berth[0] + 10, -14];
 
+/** Each company's cargo, by ticker. */
 export const CARGO: Record<string, string> = {
-  COFFEE: '/art/coffee.webp', SPICE: '/art/spice.webp', SILK: '/art/silk.webp', SALT: '/art/salt.webp', COPPER: '/art/copper.webp',
+  BEAN: '/art/coffee.webp', SAFF: '/art/spice.webp', JADE: '/art/silk.webp', CLIF: '/art/salt.webp', REDH: '/art/copper.webp',
 };
 
 /** One sprite per event kind, in the same order as Harbour.sol's table. */

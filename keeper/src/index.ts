@@ -224,7 +224,7 @@ async function tick() {
 // ---- HTTP ----------------------------------------------------------------
 
 const app = new Hono();
-const goodsMeta = GOODS.map((g) => ({ id: g.id, symbol: g.symbol, name: g.name, basePrice: g.basePrice }));
+const goodsMeta = GOODS.map((g) => ({ id: g.id, symbol: g.symbol, name: g.name, cargo: g.cargo, basePrice: g.basePrice }));
 
 app.use('/api/*', async (c, next) => {
   await next();
@@ -319,5 +319,18 @@ app.get('/*', serveStatic({ path: `${process.env.WEB_DIST ?? '../web/dist'}/inde
 
 serve({ fetch: app.fetch, port: PORT });
 log(`keeper ${keeper.address} on :${PORT}, chain ${CHAIN_WS}, events via ${drawer.mode}, round ${ROUND_SECONDS}s`);
+/** Assets created under the old cargo names get their company names and tickers on boot. */
+async function syncMetadata() {
+  const stale: ReturnType<typeof api.tx.assets.setMetadata>[] = [];
+  for (const g of GOODS) {
+    const m = ((await api.query.assets.metadata(g.id)) as any).toHuman();
+    if (m?.name !== g.name || m?.symbol !== g.symbol) stale.push(api.tx.assets.setMetadata(g.id, g.name, g.symbol, 10));
+  }
+  if (!stale.length) return;
+  const sent = await enqueue(() => send(api, api.tx.utility.batchAll(stale), keeper));
+  log(`renamed ${stale.length} assets to company names (${sent.hash})`);
+}
+await syncMetadata().catch((e) => log('metadata sync failed:', (e as Error).message));
+
 await tick();
 setInterval(tick, 3000);

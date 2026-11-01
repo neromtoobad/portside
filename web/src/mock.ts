@@ -3,15 +3,16 @@
 import type { HarbourState, Player } from './api';
 
 const GOODS = [
-  { id: 8801001, symbol: 'COFFEE', name: 'Coffee', basePrice: 12 },
-  { id: 8801002, symbol: 'SPICE', name: 'Spice', basePrice: 30 },
-  { id: 8801003, symbol: 'SILK', name: 'Silk', basePrice: 55 },
-  { id: 8801004, symbol: 'SALT', name: 'Salt', basePrice: 4 },
-  { id: 8801005, symbol: 'COPPER', name: 'Copper', basePrice: 20 },
+  { id: 8801001, symbol: 'BEAN', name: 'Golden Bean', cargo: 'coffee', basePrice: 12 },
+  { id: 8801002, symbol: 'SAFF', name: 'Saffron & Sons', cargo: 'spice', basePrice: 30 },
+  { id: 8801003, symbol: 'JADE', name: 'Jade Silk', cargo: 'silk', basePrice: 55 },
+  { id: 8801004, symbol: 'CLIF', name: 'White Cliffs', cargo: 'salt', basePrice: 4 },
+  { id: 8801005, symbol: 'REDH', name: 'Red Hill', cargo: 'copper', basePrice: 20 },
 ];
 const KINDS = [
-  ['Storm at sea', 'ships held offshore', 1], ['Shipwreck', 'cargo lost on the reef', 1], ['Guild buyout', 'merchants buying it all up', 1],
-  ['Bumper harvest', 'holds full to the brim', -1], ['Glut', 'too many ships in port', -1], ['Calm seas', 'nothing to report', 0],
+  ['Rivals stormbound', 'rival fleets held offshore, its ships land first', 1], ['Treasure salvaged', 'divers raised a lost cargo from the reef', 1],
+  ['Guild buyout', "the merchants' guild is buying up shares", 1], ['Warehouse glut', 'unsold cargo piling up on the quay', -1],
+  ['Rival fleet', 'three rival ships dropped anchor', -1], ['Calm seas', 'a quiet day on the exchange', 0],
 ] as const;
 // ?mock&fast runs short rounds for testing the dock moment.
 const FAST = typeof location !== 'undefined' && new URLSearchParams(location.search).has('fast');
