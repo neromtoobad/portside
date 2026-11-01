@@ -3,8 +3,11 @@ import type { KeyringPair } from '@polkadot/keyring/types';
 import { getState, getPlayer, register, type HarbourState, type Player, type Good } from './api';
 import { loadWallet, trade, quote, toUnits, fromUnits } from './chain';
 import { mockState, mockPlayer, mockTrade } from './mock';
-import { Harbour, roundChange } from './Harbour';
+import { Harbour, roundChange, type Pop } from './Harbour';
 import { CARGO, KIND_ART, captainArt } from './art';
+import { sfx } from './sound';
+import { callsFor, rankFor, streakOf } from './progress';
+import { shareBrag } from './share';
 
 const MOCK = new URLSearchParams(location.search).has('mock');
 const EXPLORER = import.meta.env.VITE_EXPLORER ?? 'https://node-console.portaldot.dev/#/explorer/query/';
@@ -195,6 +198,75 @@ function TradeDrawer({ good, initialSide, state, player, pair, onClose, onTraded
   );
 }
 
+const ago = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`; };
+
+function Flame() {
+  return <svg viewBox="0 0 16 20" width="12" height="15" aria-hidden="true"><path d="M8 0c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-6 0 2 1 3 2 3 0-3-1-6 1-9z" fill="currentColor" /></svg>;
+}
+
+function SoundToggle() {
+  const [muted, setMuted] = useState(sfx.muted);
+  useEffect(() => sfx.subscribe(setMuted), []);
+  return (
+    <button className="sound" onClick={() => sfx.setMuted(!muted)} aria-label={muted ? 'Turn sound on' : 'Turn sound off'} title={muted ? 'Sound off' : 'Sound on'}>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+        {muted
+          ? <path d="M16 9l5 6m0-6l-5 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          : <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" />}
+      </svg>
+    </button>
+  );
+}
+
+type Outcome = 'win' | 'loss' | 'dodge' | 'miss';
+interface Result { key: string; outcome: Outcome; amount: number; title: string; goodName: string; dir: number; magnitude: number; kind: number; streak: number }
+
+const HEADLINES: Record<Outcome, string> = { win: 'You called it!', dodge: 'Dodged it!', loss: 'Caught out', miss: 'Missed the boat' };
+
+/** The moment the ship docks: what this round's news did to your warehouse. */
+function DockResult({ r, captain, address, rank, onClose }: { r: Result; captain: string; address: string; rank: string; onClose: () => void }) {
+  const [sharing, setSharing] = useState('');
+  const good = r.outcome === 'win' || r.outcome === 'dodge';
+  const move = `${r.goodName} ${r.dir > 0 ? '+' : '−'}${r.magnitude}%`;
+  const amount = r.outcome === 'miss' ? move : `${r.amount >= 0 ? '+' : '−'}${fmt(Math.abs(r.amount))}`;
+  async function share() {
+    setSharing('Drawing your card…');
+    const text = r.outcome === 'dodge'
+      ? `Sold before the ${r.title.toLowerCase()} hit ${r.goodName} (${r.dir > 0 ? '+' : '−'}${r.magnitude}%) and saved ${fmt(Math.abs(r.amount))} DUCAT on Portside.`
+      : `Called the ${r.title.toLowerCase()} on Portside: ${move}, ${amount} DUCAT.${r.streak >= 2 ? ` ${r.streak} calls in a row.` : ''}`;
+    const how = await shareBrag({
+      headline: HEADLINES[r.outcome], detail: `${r.title} · ${move}`, amount: `${amount} DUCAT`, up: good,
+      captain, rank, face: captainArt(address), kind: KIND_ART[r.kind], streak: r.streak,
+    }, text).catch(() => 'failed');
+    setSharing(how === 'downloaded' ? 'Card saved. Attach it to your post.' : how === 'failed' ? 'Could not draw the card.' : '');
+  }
+  return (
+    <div className={`result is-${r.outcome}`} role="status">
+      {good && <div className="coins" aria-hidden="true">{Array.from({ length: 16 }, (_, i) => <i key={i} style={{ left: `${(i * 37) % 100}%`, animationDelay: `${(i % 5) * 0.12}s` }} />)}</div>}
+      <div className="panel result-card">
+        <button className="x" onClick={onClose} aria-label="Close">×</button>
+        <img src={KIND_ART[r.kind]} alt="" />
+        <h2>{HEADLINES[r.outcome]}</h2>
+        <p className="detail">{r.title} · {move}</p>
+        <b className={good ? 'up' : r.outcome === 'loss' ? 'down' : ''}>{amount}{r.outcome !== 'miss' && <i> DUCAT</i>}</b>
+        <p className="sub">{{
+          win: 'You were holding when it landed.',
+          dodge: 'You sold before it landed.',
+          loss: 'You were holding when it landed. Sell before the next one.',
+          miss: 'No cargo aboard. Buy before the next ship docks.',
+        }[r.outcome]}</p>
+        {r.streak >= 2 && r.outcome === 'win' && <span className="streak big"><Flame /> {r.streak} calls in a row</span>}
+        <div className="result-btns">
+          {good && <button className="btn go" onClick={share} disabled={!!sharing && sharing.endsWith('…')}>Share this win</button>}
+          <button className="btn" onClick={onClose}>Back to trading</button>
+        </div>
+        {sharing && <p className="sub">{sharing}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const now = useClock();
   const [pair, setPair] = useState<KeyringPair>();
@@ -211,6 +283,13 @@ export default function App() {
   const [howto, setHowto] = useState(false);
   const [recap, setRecap] = useState<{ round: number; delta: number; rank: number }>();
   const roundMark = useRef<{ round: number; worth: number }>();
+  const [result, setResult] = useState<Result>();
+  const [pops, setPops] = useState<Pop[]>([]);
+  const [promo, setPromo] = useState<string>();
+  const seen = useRef<Set<string>>();
+  const dockSnap = useRef<{ key: string; docked: boolean; price: number; held: number }>();
+  const lastTick = useRef(0);
+  const lastTier = useRef<number>();
 
   // When a round closes, tell the player how their warehouse did.
   useEffect(() => {
@@ -237,6 +316,88 @@ export default function App() {
   }, [pair]);
   useEffect(() => { refresh(); const id = setInterval(refresh, 2500); return () => clearInterval(id); }, [refresh]);
 
+  const names = useMemo(() => new Map(state?.leaderboard.map((r) => [r.address, r.name]) ?? []), [state?.leaderboard]);
+  const calls = useMemo(() => (state && player?.trades ? callsFor(state, player.trades) : []), [state, player?.trades]);
+  const streak = streakOf(calls);
+
+  // Other captains' trades rise off their pier as they land.
+  useEffect(() => {
+    if (!state || !pair) return;
+    const fresh = state.trades.filter((t) => !seen.current?.has(t.hash));
+    const first = !seen.current;
+    seen.current ??= new Set();
+    fresh.forEach((t) => seen.current!.add(t.hash));
+    if (first) return;
+    const added: Pop[] = fresh.filter((t) => t.address !== pair.address).map((t): Pop => {
+      const buy = t.from === state.ducat;
+      return { key: t.hash, good: state.goods.findIndex((g) => g.id === (buy ? t.to : t.from)), address: t.address, name: names.get(t.address) ?? short(t.address), side: buy ? 'buy' : 'sell' };
+    }).filter((p) => p.good >= 0);
+    if (!added.length) return;
+    sfx.clink();
+    setPops((p) => [...p, ...added].slice(-8));
+    setTimeout(() => setPops((p) => p.filter((x) => !added.some((a) => a.key === x.key))), 4200);
+  }, [state?.trades]);
+
+  // Horn when a news ship appears; when it docks, work out what it did to this player's warehouse.
+  useEffect(() => {
+    const ev = state?.event;
+    if (!state || !ev) return;
+    const key = `${ev.season}:${ev.round}`;
+    const id = state.goods[ev.good]?.id;
+    const price = state.prices[id]?.price ?? 0;
+    const held = player?.holdings?.[id] ?? 0;
+    const prev = dockSnap.current;
+    if (!prev || prev.key !== key) {
+      if (prev && ev.dir !== 0) sfx.horn();
+      dockSnap.current = { key, docked: !!ev.docked, price, held };
+      return;
+    }
+    if (!ev.docked) { dockSnap.current = { key, docked: false, price, held }; return; }
+    if (prev.docked) return;
+    dockSnap.current = { ...prev, docked: true };
+    if (ev.dir === 0) return;
+    sfx.splash();
+    setTimeout(() => sfx.horn(true), 250);
+    if (!player?.registered) return;
+    // Holdings can lag a refresh behind the chain, so count this round's own trades too.
+    const mine = (player.trades ?? []).filter((t) => t.t >= state.roundStartedAt);
+    const bought = mine.filter((t) => t.to === id).reduce((s, t) => s + t.amountOut, 0);
+    const sold = mine.filter((t) => t.from === id).reduce((s, t) => s + t.amountIn, 0);
+    const aboard = Math.max(prev.held, bought - sold);
+    const move = (ev.magnitude / 100) * prev.price;
+    let outcome: Outcome | undefined, amount = 0;
+    if (aboard >= 0.005) { outcome = ev.dir > 0 ? 'win' : 'loss'; amount = ev.dir * aboard * move; }
+    else if (ev.dir < 0 && sold > 0) { outcome = 'dodge'; amount = sold * move; }
+    else if (ev.dir > 0) outcome = 'miss';
+    if (!outcome) return;
+    const run = outcome === 'win' || outcome === 'dodge' ? streak.current + (calls.some((c) => `${c.season}:${c.round}` === key) ? 0 : 1) : 0;
+    setResult({ key, outcome, amount, title: ev.title, goodName: state.goods[ev.good]?.name ?? '', dir: ev.dir, magnitude: ev.magnitude, kind: ev.kind, streak: run });
+    if (outcome === 'win') { sfx.coins(10); setTimeout(() => sfx.fanfare(), 300); }
+    else if (outcome === 'dodge') sfx.coins(5);
+    else if (outcome === 'loss') sfx.lose();
+    setTimeout(() => setResult((r) => (r?.key === key ? undefined : r)), 11000);
+  }, [state, player]);
+
+  // Countdown ticks for the ship's last ten seconds.
+  useEffect(() => {
+    const ev = state?.event;
+    if (!state || !ev || ev.dir === 0 || ev.docked) return;
+    const left = Math.ceil((state.dockAt - now) / 1000);
+    if (left >= 1 && left <= 10 && left !== lastTick.current) { lastTick.current = left; sfx.tick(left <= 3); }
+  }, [now]);
+
+  // Promotion when net worth crosses into a new rank.
+  useEffect(() => {
+    if (!player?.registered || player.worth === undefined) return;
+    const r = rankFor(player.worth);
+    if (lastTier.current !== undefined && r.tier > lastTier.current) {
+      setPromo(r.name);
+      sfx.fanfare();
+      setTimeout(() => setPromo(undefined), 6000);
+    }
+    lastTier.current = r.tier;
+  }, [player?.worth]);
+
   async function join(name: string) {
     if (!pair) return;
     setJoining(true); setJoinError(undefined);
@@ -256,20 +417,34 @@ export default function App() {
   const myRank = state.leaderboard.findIndex((r) => r.address === pair.address) + 1;
   const me = state.leaderboard.find((r) => r.address === pair.address);
   const ev = state.event;
+  const myRankName = rankFor(worth);
+  const thisRound = state.trades.filter((t) => t.t >= state.roundStartedAt);
+  const crowd = state.goods.map((g) => {
+    const by = new Map<string, { address: string; name: string }>();
+    for (const t of thisRound) if (t.to === g.id || t.from === g.id) by.set(t.address, { address: t.address, name: names.get(t.address) ?? short(t.address) });
+    return [...by.values()];
+  });
+  const traders = new Set(thisRound.map((t) => t.address)).size;
+  const latest = state.trades.slice(0, 3);
 
   return (
     <div className="game">
-      <Harbour state={state} player={player} now={now} onPick={(id) => setPicked({ id, side: 'buy' })} />
+      <Harbour state={state} player={player} now={now} onPick={(id) => setPicked({ id, side: 'buy' })} crowd={crowd} pops={pops} />
 
       <div className="hud">
         <NewsCard state={state} now={now} />
 
         <section className="panel purse">
-          <img className="face" src={captainArt(pair.address)} alt="" />
-          <div className="who"><small>Captain</small><b>{me?.name ?? 'Unsigned'}</b></div>
+          <img className={`face tier-${myRankName.tier}`} src={captainArt(pair.address)} alt="" />
+          <div className="who">
+            <small title={myRankName.next ? `${fmt(myRankName.toNext, 0)} DUCAT to ${myRankName.next}` : 'Top rank'}>{player?.registered ? myRankName.name : 'Captain'}</small>
+            <b>{me?.name ?? 'Unsigned'}</b>
+          </div>
+          {streak.current >= 2 && <span className={`streak ${streak.current >= 3 ? 'hot' : ''}`} title="Right calls in a row"><Flame /> {streak.current}</span>}
           <div><small>Purse</small><b>{fmt(purse)}<i> DUCAT</i></b></div>
           <div><small>Net worth</small><b>{fmt(worth)}</b><em className={pnl >= 0 ? 'up' : 'down'}>{pnl >= 0 ? '+' : ''}{fmt(pnl)}</em></div>
           <div className="rank"><small>Rank</small><b>{myRank ? `#${myRank}` : '—'}</b><i>of {state.players}</i></div>
+          <SoundToggle />
         </section>
 
         <section className={`panel captains ${crewOpen ? '' : 'is-folded'}`}>
@@ -284,8 +459,8 @@ export default function App() {
               {state.leaderboard.slice(0, 10).map((r, i) => (
                 <li key={r.address} className={r.address === pair.address ? 'me' : ''}>
                   <span className="pos">{i + 1}</span>
-                  <img src={captainArt(r.address)} alt="" />
-                  <span className="who">{r.address === pair.address ? `${r.name} (you)` : r.name}</span>
+                  <img className={`tier-${rankFor(r.worth).tier}`} src={captainArt(r.address)} alt="" />
+                  <span className="who">{r.address === pair.address ? `${r.name} (you)` : r.name}<small>{rankFor(r.worth).name}</small></span>
                   <span className="val">{fmt(r.worth, 0)}</span>
                 </li>
               ))}
@@ -294,6 +469,9 @@ export default function App() {
           )}
           {crewOpen && tab === 'ledger' && (
             <ul className="ledger">
+              {calls.length > 0 && (
+                <li className="calls"><span><b>{streak.right}</b> right calls · <b>{streak.wrong}</b> wrong · best run <b>{streak.best}</b></span></li>
+              )}
               {(player?.trades ?? []).map((t) => (
                 <li key={t.hash}>
                   <img src={CARGO[goodOf(t.from === state.ducat ? t.to : t.from)?.symbol ?? '']} alt="" />
@@ -322,6 +500,22 @@ export default function App() {
             </ul>
           )}
         </section>
+
+        <div className="ticker" aria-live="polite">
+          <span className="ticker-count">{traders ? `${traders} captain${traders > 1 ? 's' : ''} trading this round` : 'Quiet harbour this round'}</span>
+          {latest.map((t) => {
+            const buy = t.from === state.ducat;
+            const g = goodOf(buy ? t.to : t.from);
+            return (
+              <span key={t.hash} className="ticker-item">
+                <img src={captainArt(t.address)} alt="" />
+                <b>{t.address === pair.address ? 'You' : names.get(t.address) ?? short(t.address)}</b>
+                <span className={buy ? 'up' : 'down'}>{buy ? 'bought' : 'sold'}</span> {g?.name}
+                <small>{ago(now - t.t)}</small>
+              </span>
+            );
+          })}
+        </div>
 
         <nav className="dock" aria-label="Market">
           {state.goods.map((g, i) => {
@@ -376,6 +570,14 @@ export default function App() {
           <span>Round {recap.round} closed</span>
           <b className={recap.delta >= 0 ? 'up' : 'down'}>{recap.delta >= 0 ? '+' : ''}{fmt(recap.delta)} DUCAT</b>
           {recap.rank > 0 && <span>now #{recap.rank}</span>}
+        </div>
+      )}
+
+      {result && <DockResult r={result} captain={me?.name ?? 'Captain'} address={pair.address} rank={myRankName.name} onClose={() => setResult(undefined)} />}
+      {promo && (
+        <div className="recap promo" role="status">
+          <img className={`tier-${myRankName.tier}`} src={captainArt(pair.address)} alt="" />
+          <span>Promoted to</span><b>{promo}</b>
         </div>
       )}
 

@@ -13,7 +13,9 @@ const KINDS = [
   ['Storm at sea', 'ships held offshore', 1], ['Shipwreck', 'cargo lost on the reef', 1], ['Guild buyout', 'merchants buying it all up', 1],
   ['Bumper harvest', 'holds full to the brim', -1], ['Glut', 'too many ships in port', -1], ['Calm seas', 'nothing to report', 0],
 ] as const;
-const ROUND = 120_000, DOCK = 30_000;
+// ?mock&fast runs short rounds for testing the dock moment.
+const FAST = typeof location !== 'undefined' && new URLSearchParams(location.search).has('fast');
+const ROUND = FAST ? 40_000 : 120_000, DOCK = FAST ? 20_000 : 30_000;
 const UNIT = 1e10;
 const hex = () => '0x' + Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('');
 
@@ -48,6 +50,13 @@ function step(now = Date.now()) {
     if (f > 1) swap(id, true, (pools[id].d * (s - 1)) / 0.997); else swap(id, false, (pools[id].g * (1 / s - 1)) / 0.997);
     docked = true;
   }
+  // A rival or two jumps on the news before the ship lands, so the piers have a crowd.
+  if (!docked && event.dir !== 0 && Math.random() < 0.2) {
+    const r = rivals[Math.floor(Math.random() * rivals.length)], id = GOODS[event.good].id, buy = event.dir > 0;
+    const amountIn = buy ? 40 + Math.random() * 200 : (40 + Math.random() * 200) / price(id);
+    const out = swap(id, buy, amountIn * UNIT) / UNIT;
+    trades.unshift({ address: r.address, hash: hex(), block: 265_000 + trades.length, t: now, from: buy ? 8801000 : id, to: buy ? id : 8801000, amountIn, amountOut: out });
+  }
   for (const g of GOODS) {
     // Rival traders lean toward the base price, like the keeper's mid-round tide.
     const buy = Math.random() < (price(g.id) < g.basePrice ? 0.65 : 0.35);
@@ -73,7 +82,7 @@ export function mockState(address: string): HarbourState {
     prices: Object.fromEntries(GOODS.map((g) => [g.id, { price: price(g.id), ducat: String(Math.round(pools[g.id].d)), goods: String(Math.round(pools[g.id].g)) }])),
     history,
     leaderboard: board.map((r) => ({ ...r, holdings: {} })),
-    trades,
+    trades: trades.slice(0, 40),
     anchors: [{ day: '2026-10-31', root: hex(), proof: hex(), players: 8 }],
     players: board.length,
     mode: 'contract',

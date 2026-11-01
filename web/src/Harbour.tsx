@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { HarbourState, Player } from './api';
-import { PIERS, horizonFor, KIND_ART } from './art';
+import { PIERS, horizonFor, KIND_ART, captainArt } from './art';
 import { Flag } from './Flags';
 
 const fmt = (n: number, d = 2) => n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -19,7 +19,15 @@ export function roundChange(state: HarbourState, id: number) {
  * The harbour itself. Each good has a pier with its signal flag and a live price bubble; the round's
  * news arrives as a ship that sails in from the horizon and moors at that good's pier when it docks.
  */
-export function Harbour({ state, player, now, onPick }: { state: HarbourState; player?: Player; now: number; onPick: (id: number) => void }) {
+/** Someone's trade, shown for a few seconds as their face rising off the pier. */
+export interface Pop { key: string; good: number; address: string; name: string; side: 'buy' | 'sell' }
+
+export function Harbour({ state, player, now, onPick, crowd, pops }: {
+  state: HarbourState; player?: Player; now: number; onPick: (id: number) => void;
+  /** Captains who traded each good this round, by good index. */
+  crowd: { address: string; name: string }[][];
+  pops: Pop[];
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const ev = state.event;
   const target = ev ? ev.good : -1;
@@ -52,10 +60,12 @@ export function Harbour({ state, player, now, onPick }: { state: HarbourState; p
   const from = pier ? horizonFor(pier.berth) : undefined;
   const ship = pier && from && !calm ? [lerp(from[0], pier.berth[0], ease(t)), lerp(from[1], pier.berth[1], ease(t))] : undefined;
   const moored = !!ev?.docked;
+  const left = Math.ceil((state.dockAt - now) / 1000);
+  const final = ship && !moored && left > 0 && left <= 10 ? left : undefined;
 
   return (
     <div className="harbour" ref={wrap}>
-      <div className="stage">
+      <div className={`stage ${splash !== undefined ? 'is-shaking' : ''}`}>
         <img className="scene" src="/art/scene.webp" srcSet="/art/scene-1600.webp 1600w, /art/scene.webp 2688w" sizes="(max-width: 760px) 1100px, 100vw" alt="" draggable={false} />
 
         <img className="drifter d1" src="/art/ship.webp" alt="" />
@@ -82,6 +92,18 @@ export function Harbour({ state, player, now, onPick }: { state: HarbourState; p
                 <i>{ch >= 0 ? '▲' : '▼'}{fmt(Math.abs(ch), 1)}%</i>
                 {held >= 0.005 && <em>you {fmt(held, held < 10 ? 2 : 1)}</em>}
               </button>
+              {crowd[i]?.length > 0 && (
+                <span className="crowd" style={{ left: `${pr.cargo[0] + 3.4}%`, top: `${pr.cargo[1] - 1}%` }} title={crowd[i].map((c) => c.name).join(', ')}>
+                  {crowd[i].slice(0, 3).map((c) => <img key={c.address} src={captainArt(c.address)} alt={c.name} />)}
+                  {crowd[i].length > 3 && <b>+{crowd[i].length - 3}</b>}
+                </span>
+              )}
+              {pops.filter((p) => p.good === i).map((p, j) => (
+                <span key={p.key} className={`trade-pop ${p.side}`} style={{ left: `${pr.cargo[0] - 1 + j * 2}%`, top: `${pr.cargo[1] - 8}%` }}>
+                  <img src={captainArt(p.address)} alt="" />
+                  <span><b>{p.name}</b> {p.side === 'buy' ? 'bought' : 'sold'}</span>
+                </span>
+              ))}
               {splash !== undefined && news && ev && (
                 <span className={`jump ${ev.dir > 0 ? 'is-up' : 'is-down'}`} style={{ left: `${pr.berth[0]}%`, top: `${pr.berth[1] - 6}%` }}>
                   {ev.dir > 0 ? '+' : '−'}{ev.magnitude}%
@@ -99,6 +121,7 @@ export function Harbour({ state, player, now, onPick }: { state: HarbourState; p
             <div className={`ship-wrap ${moored ? 'moored' : 'sailing'}`} style={{ left: `${ship[0]}%`, top: `${ship[1]}%`, ['--s' as string]: 0.72 + 0.28 * ease(t) }}>
               <img className="ship" src="/art/ship.webp" alt={`Ship bringing news about ${state.goods[target]?.name}`} />
               {[0, 2, 3].includes(ev.kind) && <img className={`omen k${ev.kind}`} src={KIND_ART[ev.kind]} alt="" />}
+              {final !== undefined && <span key={final} className={`count ${final <= 3 ? 'is-urgent' : ''}`}>{final}</span>}
             </div>
             {ev.kind === 1 && <img className="debris" src={KIND_ART[1]} alt="" style={{ left: `${pier!.berth[0] + 6}%`, top: `${pier!.berth[1] - 12}%` }} />}
             {splash !== undefined && <span className="splash" style={{ left: `${pier!.berth[0]}%`, top: `${pier!.berth[1]}%` }} />}
