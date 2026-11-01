@@ -14,10 +14,21 @@ export interface HarbourState {
   prices: Record<number, { price: number; ducat: string; goods: string } | undefined>;
   history: Record<number, { t: number; p: number }[]>;
   leaderboard: Standing[]; trades: Trade[];
-  anchors: { day: string; root: string; proof: string; players: number }[];
+  anchors: { day: string; root: string; proof: string; players: number; top?: { address: string; name: string; worth: number }[] }[];
   players: number; mode: 'contract' | 'remark'; feeMode: 'ducat' | 'native';
+  /** Where rumour tickets are paid, and what they cost. */
+  harbourmaster?: string;
+  rumour?: { price: number; perDay: number; leadSeconds: number };
+  seasonEndsAt?: number;
+  contract?: string;
 }
-export interface Player extends Partial<Standing> { registered: boolean; rank: number | null; trades: Trade[] }
+export interface Rumour { tickets: number; boughtToday: number; heard?: HarbourEvent & { opensAt: number } }
+export interface Player extends Partial<Standing> {
+  registered: boolean; rank: number | null; trades: Trade[];
+  joinedAt?: number;
+  worthHistory?: { t: number; w: number }[];
+  rumour?: Rumour;
+}
 
 export const API = import.meta.env.VITE_API ?? '';
 

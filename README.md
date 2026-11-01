@@ -53,10 +53,23 @@ flowchart LR
 
 ### A round
 1. **Reveal.** The keeper reveals the seed it committed last round. `Harbour.reveal` mixes it with the previous block hash, so neither the keeper nor the players can pick or predict the event. The contract emits `RoundOpened(good, kind, magnitude)`.
-2. **Read the board.** Players see "SHIPWRECK · COPPER ▲ 29%" and have 45 seconds to trade before the ship docks.
+2. **Read the board.** Players see "Earnings beat · NVDA ▲ 12%" and have 45 seconds to trade before the ship docks.
 3. **Dock.** The keeper makes one house swap that moves the pool's spot price by exactly the announced amount. On a constant-product pool the DUCAT side scales by √factor.
 4. **Tide.** Halfway through the round every market drifts a quarter of the way back to its base price, which keeps the economy bounded.
-5. **Day end.** Standings are hashed into a Merkle root and anchored with `Harbour.anchorDay`.
+5. **Rumour window.** A minute before the round turns over the keeper reveals the next draw early. Captains who paid the harbourmaster a 25 DUCAT rumour ticket (an on-chain `assets.transferKeepAlive`, two a day) hear it from the API before the board posts it. The draw still comes from the contract, so a ticket buys time, not a different outcome.
+6. **Day end.** Standings are hashed into a Merkle root and anchored with `Harbour.anchorDay`, with the day's top three kept as daily champions.
+
+### Around the game
+
+The site is a full game site, not just the board:
+
+- **Home** (`/`): live round, five-pier board, how a round works, captains' board and FAQ.
+- **Guide** (`/guide`): quick start, a round minute by minute, the six kinds of news, ranks, badges, rumours and fair play.
+- **Season** (`/season`): countdown, podium, full standings and daily champions from the on-chain anchors.
+- **Portfolio** (`/portfolio`) and **captain pages** (`/captain/:address`): net worth chart, holdings with average cost and P&L, call record, today's missions and a 12-badge cabinet.
+- **In the game**: three daily missions (the same for everyone, picked from the date), badge and mission toasts, the rumour strip on the news card, streaks, ranks and a shareable win card.
+
+Missions and badges are worked out from each captain's indexed trades and calls, so they need nothing new on-chain.
 
 ## Repo layout
 

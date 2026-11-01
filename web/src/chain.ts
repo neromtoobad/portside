@@ -43,6 +43,14 @@ export async function trade(pair: KeyringPair, ducat: number, goodId: number, si
   return (await api.rpc.author.submitExtrinsic(signed)).toHex();
 }
 
+/** Pays the harbourmaster in DUCAT, which is how a rumour ticket is bought. */
+export async function payDucat(pair: KeyringPair, ducat: number, to: string, amount: bigint, feeInDucat = true) {
+  const api = await chain();
+  const tx = api.tx.assets.transferKeepAlive(ducat, to, amount);
+  const signed = await tx.signAsync(pair, feeInDucat ? { assetId: withId(ducat), nonce: -1 } : { nonce: -1 });
+  return (await api.rpc.author.submitExtrinsic(signed)).toHex();
+}
+
 /** Constant-product quote with the pool's 0.3% LP fee, same as the runtime's. */
 export function quote(reserveIn: bigint, reserveOut: bigint, amountIn: bigint) {
   if (amountIn <= 0n || reserveIn <= 0n) return 0n;

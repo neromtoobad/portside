@@ -41,10 +41,21 @@ function swap(id: number, ducatIn: boolean, amountIn: number) {
   return out;
 }
 
+// Rumours: the next draw is known LEAD ms before the turn, and a ticket holder hears it then.
+const LEAD = FAST ? 15_000 : 30_000;
+let pending: ReturnType<typeof draw> | undefined, tickets = 0, boughtToday = 0, heard = 0;
+const worthHistory: { t: number; w: number }[] = [];
+
+const myWorth = () => me.DUCAT + GOODS.reduce((s, g) => s + me.goods[g.id] * price(g.id), 0);
+
 function step(now = Date.now()) {
   if (now - roundStart > ROUND) {
     events.unshift({ ...event, round, t: roundStart });
-    roundStart = now; round += 1; event = draw(); docked = event.dir === 0;
+    roundStart = now; round += 1; event = pending ?? draw(); pending = undefined; docked = event.dir === 0;
+  }
+  if (!pending && now - roundStart > ROUND - LEAD) {
+    pending = draw();
+    if (tickets > 0) { tickets--; heard = round + 1; }
   }
   if (!docked && now - roundStart > DOCK) {
     const id = GOODS[event.good].id, f = 1 + (event.dir * event.magnitude) / 100, s = Math.sqrt(f);
@@ -67,10 +78,10 @@ function step(now = Date.now()) {
     if (h.length > 120) h.shift();
   }
   rivals.forEach((r) => { r.worth += Math.round(Math.random() * 30 - 14); });
+  if (!worthHistory.length || now - worthHistory[worthHistory.length - 1].t > 20_000) worthHistory.push({ t: now, w: myWorth() });
 }
 for (let i = 0; i < 60; i++) step(Date.now() - (60 - i) * 2500);
 
-const myWorth = () => me.DUCAT + GOODS.reduce((s, g) => s + me.goods[g.id] * price(g.id), 0);
 
 export function mockState(address: string): HarbourState {
   step();
@@ -79,15 +90,22 @@ export function mockState(address: string): HarbourState {
     now: Date.now(), roundSeconds: ROUND / 1000, dockSeconds: DOCK / 1000, ducat: 8801000, goods: GOODS,
     season: 1, roundStartedAt: roundStart, dockAt: roundStart + DOCK,
     event: { ...event, season: 1, round, entropy: hex(), proof: hex(), source: 'contract', docked },
-    events: events.slice(0, 10).map((e) => ({ ...e, season: 1, entropy: hex(), proof: hex(), source: 'contract' })),
+    events: events.slice(0, 60).map((e) => ({ ...e, season: 1, entropy: hex(), proof: hex(), source: 'contract' })),
     prices: Object.fromEntries(GOODS.map((g) => [g.id, { price: price(g.id), ducat: String(Math.round(pools[g.id].d)), goods: String(Math.round(pools[g.id].g)) }])),
     history,
     leaderboard: board.map((r) => ({ ...r, holdings: {} })),
     trades: trades.slice(0, 40),
-    anchors: [{ day: '2026-10-31', root: hex(), proof: hex(), players: 8 }],
+    anchors: [
+      { day: '2026-10-31', root: hex(), proof: hex(), players: 8, top: rivals.slice(0, 3).map((r, i) => ({ address: r.address, name: r.name, worth: 1480 - i * 90 })) },
+      { day: '2026-10-30', root: hex(), proof: hex(), players: 6, top: rivals.slice(3, 6).map((r, i) => ({ address: r.address, name: r.name, worth: 1310 - i * 70 })) },
+    ],
     players: board.length,
     mode: 'contract',
     feeMode: 'ducat',
+    harbourmaster: '5Harbourmaster',
+    rumour: { price: 25, perDay: 2, leadSeconds: LEAD / 1000 },
+    seasonEndsAt: Date.parse('2026-11-09T12:00:00Z'),
+    contract: '0x04570accAB9f6fa3637aE0bBbEDfB9D46440D297',
   };
 }
 
@@ -95,7 +113,20 @@ export function mockPlayer(address: string): Player {
   return {
     registered: true, name: 'You', address, worth: myWorth(), rank: null,
     holdings: { 8801000: me.DUCAT, ...me.goods }, trades: trades.filter((t) => t.address === address),
+    joinedAt: Date.now() - 3 * 3600_000,
+    worthHistory: [...worthHistory, { t: Date.now(), w: myWorth() }],
+    rumour: {
+      tickets, boughtToday,
+      heard: pending && heard === round + 1 ? { ...pending, season: 1, round: round + 1, entropy: hex(), proof: hex(), source: 'contract', opensAt: roundStart + ROUND } : undefined,
+    },
   };
+}
+
+export function mockRumour() {
+  if (boughtToday >= 2 || me.DUCAT < 25) throw new Error('no rumour for you');
+  me.DUCAT -= 25; boughtToday++; tickets++;
+  if (pending && heard !== round + 1) { tickets--; heard = round + 1; }
+  return hex();
 }
 
 export function mockTrade(address: string, goodId: number, side: 'buy' | 'sell', amount: number) {

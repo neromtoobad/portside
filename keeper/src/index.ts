@@ -25,6 +25,13 @@ const TANK_LOW_CENTS = BigInt(process.env.TANK_LOW_CENTS ?? 40);
 const DATA_DIR = process.env.DATA_DIR ?? '.data';
 const CHAIN_HTTP = process.env.CHAIN_HTTP ?? CHAIN_WS.replace(/^ws/, 'http');
 const PORT = Number(process.env.PORT ?? 8790);
+/** A rumour ticket costs this much DUCAT, sent to the harbourmaster, and a captain can buy this many a day. */
+const RUMOUR_PRICE = Number(process.env.RUMOUR_PRICE ?? 25);
+const RUMOURS_PER_DAY = Number(process.env.RUMOURS_PER_DAY ?? 2);
+/** The next draw is revealed on-chain this long before its round opens; ticket holders hear it then. */
+const RUMOUR_LEAD_SECONDS = Number(process.env.RUMOUR_LEAD_SECONDS ?? 60);
+const SEASON_ENDS = process.env.SEASON_ENDS ?? '2026-11-09T12:00:00Z';
+const today = () => new Date().toISOString().slice(0, 10);
 
 interface Trade { address: string; hash: string; block: number; t: number; from: number; to: number; amountIn: number; amountOut: number }
 interface State {
@@ -38,7 +45,12 @@ interface State {
   players: Record<string, { name: string; joinedAt: number; tx: string }>;
   leaderboard: { address: string; name: string; worth: number; holdings: Record<number, number> }[];
   trades: Trade[];
-  anchors: { day: string; root: string; proof: string; players: number }[];
+  anchors: { day: string; root: string; proof: string; players: number; top?: { address: string; name: string; worth: number }[] }[];
+  /** The next round's draw, revealed early for rumour holders. */
+  pending?: HarbourEvent & { revealedAt: number };
+  rumours: Record<string, { tickets: number; day: string; bought: number; heard?: string }>;
+  /** Net worth over time, sampled every couple of minutes, for portfolio charts. */
+  worth: Record<string, { t: number; w: number }[]>;
   lastBlock: number;
   day: string;
   drawer?: { season: number; round: number; seed: string };
@@ -48,7 +60,9 @@ mkdirSync(DATA_DIR, { recursive: true });
 const file = `${DATA_DIR}/state.json`;
 const state: State = existsSync(file)
   ? JSON.parse(readFileSync(file, 'utf8'))
-  : { season: 0, roundStartedAt: 0, dockAt: 0, revertAt: 0, events: [], history: {}, players: {}, leaderboard: [], trades: [], anchors: [], lastBlock: 0, day: '' };
+  : { season: 0, roundStartedAt: 0, dockAt: 0, revertAt: 0, events: [], history: {}, players: {}, leaderboard: [], trades: [], anchors: [], rumours: {}, worth: {}, lastBlock: 0, day: '' };
+state.rumours ??= {};
+state.worth ??= {};
 const api = await connect();
 const keeper = keeperPair();
 const drawer = new EventDrawer(api, keeper);
@@ -83,15 +97,34 @@ async function openRound() {
     state.season = drawer.season;
     log('season', state.season, 'opened via', drawer.mode);
   }
-  const ev = await enqueue(() => drawer.next());
+  const ev = state.pending ?? (await enqueue(() => drawer.next()));
+  state.pending = undefined;
   const now = Date.now();
   state.event = { ...ev, docked: ev.magnitude === 0 };
-  state.events = [{ ...ev, t: now }, ...state.events].slice(0, 40);
+  state.events = [{ ...ev, t: now }, ...state.events].slice(0, 300);
   state.roundStartedAt = now;
   state.dockAt = now + DOCK_SECONDS * 1000;
   state.revertAt = now + (ROUND_SECONDS * 1000) / 2;
   const d = describe(ev);
   log(`round ${ev.round}: ${d.title} / ${d.goodName} ${d.dir > 0 ? '+' : d.dir < 0 ? '-' : ''}${d.magnitude}% (${ev.proof.slice(0, 12)})`);
+  save();
+}
+
+/**
+ * A minute before the round turns over, reveal its draw on-chain. The board still posts it at the
+ * turn; captains holding a rumour ticket hear it now. Nobody, the keeper included, can know a draw
+ * before its reveal, because the contract mixes in the block hash.
+ */
+async function revealEarly() {
+  const ev = await enqueue(() => drawer.next());
+  state.pending = { ...ev, revealedAt: Date.now() };
+  const key = `${ev.season}:${ev.round}`;
+  let told = 0;
+  for (const r of Object.values(state.rumours)) {
+    if (r.tickets > 0) { r.tickets--; r.heard = key; told++; }
+  }
+  const d = describe(ev);
+  log(`rumour for round ${ev.round}: ${d.title} / ${d.goodName}, told ${told}`);
   save();
 }
 
@@ -128,12 +161,21 @@ async function refreshPrices() {
   }
 }
 
+let worthSampledAt = 0;
 async function refreshLeaderboard() {
   const addrs = Object.keys(state.players);
   const rows = await netWorths(api, addrs, prices);
   state.leaderboard = rows
     .map((r) => ({ ...r, name: state.players[r.address].name }))
     .sort((a, b) => b.worth - a.worth);
+  const t = Date.now();
+  if (t - worthSampledAt < 120_000) return;
+  worthSampledAt = t;
+  for (const r of state.leaderboard) {
+    const h = (state.worth[r.address] ??= []);
+    h.push({ t, w: Math.round(r.worth * 100) / 100 });
+    if (h.length > 720) h.splice(0, h.length - 720);
+  }
 }
 
 /** Merkle root of the day's standings, anchored on-chain so any payout can be checked. */
@@ -152,7 +194,8 @@ async function anchorDayIfNeeded() {
   }
   const dayNumber = Math.floor(Date.parse(state.day) / 86_400_000);
   const proof = await enqueue(() => drawer.anchorDay(dayNumber, level[0], state.leaderboard.length));
-  state.anchors = [{ day: state.day, root: level[0], proof, players: state.leaderboard.length }, ...state.anchors].slice(0, 30);
+  const top = state.leaderboard.slice(0, 3).map(({ address, name, worth }) => ({ address, name, worth }));
+  state.anchors = [{ day: state.day, root: level[0], proof, players: state.leaderboard.length, top }, ...state.anchors].slice(0, 30);
   log('anchored', state.day, level[0].slice(0, 12));
   state.day = today;
   save();
@@ -166,6 +209,7 @@ async function indexTrades() {
     const hash = await api.rpc.chain.getBlockHash(n);
     const [block, events] = await Promise.all([api.rpc.chain.getBlock(hash), api.query.system.events.at(hash)]);
     for (const { event, phase } of events as any) {
+      if (event.section === 'assets' && event.method === 'Transferred') { creditRumour(event.data); continue; }
       if (event.section !== 'assetConversion' || event.method !== 'SwapExecuted') continue;
       const who = event.data.who.toString();
       if (!state.players[who]) continue;
@@ -183,8 +227,22 @@ async function indexTrades() {
       });
     }
   }
-  state.trades = state.trades.slice(0, 400);
+  state.trades = state.trades.slice(0, 3000);
   state.lastBlock = head;
+}
+
+/** A captain's DUCAT sent to the harbourmaster buys a rumour ticket, up to the daily limit. */
+function creditRumour(data: any) {
+  const [assetId, from, to, amount] = [Number(data[0].toString()), data[1].toString(), data[2].toString(), fromUnits(data[3].toBigInt())];
+  if (assetId !== DUCAT || to !== keeper.address || !state.players[from] || amount < RUMOUR_PRICE - 0.001) return;
+  const r = (state.rumours[from] ??= { tickets: 0, day: today(), bought: 0 });
+  if (r.day !== today()) { r.day = today(); r.bought = 0; }
+  if (r.bought >= RUMOURS_PER_DAY) return log('rumour over the daily limit from', from);
+  r.bought++; r.tickets++;
+  // Bought inside the rumour window: hear this round's rumour straight away.
+  const p = state.pending;
+  if (p && r.heard !== `${p.season}:${p.round}`) { r.tickets--; r.heard = `${p.season}:${p.round}`; }
+  log('rumour ticket bought by', state.players[from].name);
 }
 
 /** Native-fee fallback: refill any player whose tPOT is running low, in one batch. */
@@ -205,9 +263,12 @@ async function tick() {
   busy = true;
   try {
     const now = Date.now();
-    if (!state.event || now >= state.roundStartedAt + ROUND_SECONDS * 1000) await openRound();
+    const roundEnd = state.roundStartedAt + ROUND_SECONDS * 1000;
+    const seasonReady = state.season > 0 && drawer.season === state.season && !needsCommit;
+    if (!state.event || now >= roundEnd) await openRound();
     else if (!state.event.docked && now >= state.dockAt) await dock();
     else if (now >= state.revertAt) await settleTide();
+    else if (!state.pending && seasonReady && now >= roundEnd - RUMOUR_LEAD_SECONDS * 1000) await revealEarly();
     await refreshPrices();
     await indexTrades();
     await refreshLeaderboard();
@@ -243,7 +304,7 @@ app.get('/api/state', (c) => c.json({
   roundStartedAt: state.roundStartedAt,
   dockAt: state.dockAt,
   event: state.event && { ...state.event, ...describe(state.event) },
-  events: state.events.slice(0, 12).map((e) => ({ ...e, ...describe(e) })),
+  events: state.events.slice(0, 60).map((e) => ({ ...e, ...describe(e) })),
   prices: Object.fromEntries(GOODS.map((g) => [g.id, prices[g.id] && {
     price: prices[g.id].price,
     ducat: prices[g.id].reserves.ducat.toString(),
@@ -252,10 +313,14 @@ app.get('/api/state', (c) => c.json({
   history: state.history,
   leaderboard: state.leaderboard.slice(0, 50),
   trades: state.trades.slice(0, 40),
-  anchors: state.anchors.slice(0, 5),
+  anchors: state.anchors.slice(0, 14),
   players: Object.keys(state.players).length,
   mode: drawer.mode,
   feeMode: FEE_MODE,
+  harbourmaster: keeper.address,
+  rumour: { price: RUMOUR_PRICE, perDay: RUMOURS_PER_DAY, leadSeconds: RUMOUR_LEAD_SECONDS },
+  seasonEndsAt: Date.parse(SEASON_ENDS),
+  contract: process.env.HARBOUR_ADDRESS,
 }));
 
 app.get('/api/player/:address', (c) => {
@@ -266,9 +331,19 @@ app.get('/api/player/:address', (c) => {
     name: state.players[address]?.name,
     rank: row ? state.leaderboard.indexOf(row) + 1 : null,
     ...row,
-    trades: state.trades.filter((t) => t.address === address).slice(0, 30),
+    joinedAt: state.players[address]?.joinedAt,
+    trades: state.trades.filter((t) => t.address === address).slice(0, 200),
+    worthHistory: state.worth[address] ?? [],
+    rumour: rumourFor(address),
   });
 });
+
+function rumourFor(address: string) {
+  const r = state.rumours[address];
+  const p = state.pending;
+  const heard = r?.heard && p && r.heard === `${p.season}:${p.round}` ? { ...p, ...describe(p), opensAt: state.roundStartedAt + ROUND_SECONDS * 1000 } : undefined;
+  return { tickets: r?.tickets ?? 0, boughtToday: r && r.day === today() ? r.bought : 0, heard };
+}
 
 const recent = new Map<string, number[]>();
 app.post('/api/register', async (c) => {
