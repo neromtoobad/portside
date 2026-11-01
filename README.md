@@ -10,6 +10,10 @@ Prices are the game's own pools in DUCAT, not market data, and the game isn't af
 
 Built for the Portaldot Hacker House 2026 (Ecosystem DApps track).
 
+- **Play:** https://portside.nerom.site
+- **Demo video (1:57):** https://youtu.be/KOuHRhumiUc
+- **Pitch deck:** https://portside.nerom.site/slidedeck/ ([PDF](https://portside.nerom.site/slidedeck/portside-deck.pdf))
+
 ## Why it's built this way
 
 | Portaldot V3 feature | How Portside uses it |
