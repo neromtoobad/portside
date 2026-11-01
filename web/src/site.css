@@ -338,3 +338,18 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; }
   .kind-row em { grid-column: 2; }
 }
 @keyframes pop-in { from { transform: scale(0.92) translateY(-8px); opacity: 0; } }
+
+/* On laptop-height screens the news card must stay clear of the first pier's price bubble. */
+@media (min-width: 761px) and (max-height: 1000px) {
+  .news .line { display: none; }
+  .news .kind { width: 60px; height: 60px; border-radius: 15px; }
+  .news h2 { font-size: 24px; }
+  .news .voyage { margin-top: 8px; }
+  .news-foot { margin-top: 8px; padding-top: 7px; }
+  .rumour { margin-top: 8px; padding: 5px 6px 5px 8px; gap: 8px; }
+  .rumour img { width: 26px; height: 26px; }
+  .rumour small { display: none; }
+  .rumour b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rumour.heard small, .rumour.ready small { display: block; font-size: 10.5px; }
+  .rumour .btn { padding: 5px 9px; font-size: 12px; }
+}

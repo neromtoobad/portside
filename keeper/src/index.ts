@@ -389,6 +389,7 @@ app.post('/api/rpc', async (c) => {
 });
 
 app.get('/healthz', (c) => c.text('ok'));
+app.get('/slidedeck', (c) => c.redirect('/slidedeck/'));
 app.use('/*', serveStatic({ root: process.env.WEB_DIST ?? '../web/dist' }));
 // Site pages (/guide, /season, /captain/…) are client-side routes, so anything else gets the app shell.
 // serveStatic refuses paths with '..', so the shell is read directly.
