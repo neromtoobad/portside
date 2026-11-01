@@ -390,7 +390,10 @@ app.post('/api/rpc', async (c) => {
 
 app.get('/healthz', (c) => c.text('ok'));
 app.use('/*', serveStatic({ root: process.env.WEB_DIST ?? '../web/dist' }));
-app.get('/*', serveStatic({ path: `${process.env.WEB_DIST ?? '../web/dist'}/index.html` }));
+// Site pages (/guide, /season, /captain/…) are client-side routes, so anything else gets the app shell.
+// serveStatic refuses paths with '..', so the shell is read directly.
+const shell = () => readFileSync(`${process.env.WEB_DIST ?? '../web/dist'}/index.html`, 'utf8');
+app.get('/*', (c) => (c.req.path.startsWith('/api/') ? c.notFound() : c.html(shell())));
 
 serve({ fetch: app.fetch, port: PORT });
 log(`keeper ${keeper.address} on :${PORT}, chain ${CHAIN_WS}, events via ${drawer.mode}, round ${ROUND_SECONDS}s`);
