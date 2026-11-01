@@ -1,5 +1,10 @@
 {
   "name": "portside",
   "private": true,
-  "workspaces": ["contracts", "keeper", "web"]
+  "workspaces": ["contracts", "keeper", "web"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "npm run build -w web",
+    "start": "npm start -w keeper"
+  }
 }
