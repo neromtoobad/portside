@@ -9,3 +9,6 @@ contracts/typechain-types/
 *.sqlite
 .DS_Store
 .data*/
+
+# Higgsfield source sheets; the sliced sprites live in web/public/art
+design/raw/
