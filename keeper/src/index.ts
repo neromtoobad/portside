@@ -3,7 +3,8 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { decodeAddress } from '@polkadot/util-crypto';
+import { decodeAddress, blake2AsHex } from '@polkadot/util-crypto';
+import { hexToU8a } from '@polkadot/util';
 import { keccak256, toUtf8Bytes } from 'ethers';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { connect, keeperPair, send, DUCAT, GOODS, POT, UNIT, toUnits, fromUnits, CHAIN_WS, ON_FORK } from './chain.js';
@@ -70,6 +71,12 @@ drawer.season = state.season;
 drawer.restore(state.drawer);
 // A state file from before seeds were saved can't reveal its last commit: open a fresh season.
 let needsCommit = !state.drawer && state.season > 0;
+// A seed lost to a crash mid-reveal can't open the contract's commit any more: start a new season.
+if (!needsCommit && state.season > 0) {
+  try {
+    if (!(await drawer.seedMatches())) { needsCommit = true; console.log('saved seed does not match the contract commit, a new season will open'); }
+  } catch (e) { console.log('commit check failed:', (e as Error).message); }
+}
 const save = () => {
   state.drawer = drawer.snapshot();
   writeFileSync(file, JSON.stringify(state));
@@ -82,8 +89,16 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 
 
 /** Every keeper extrinsic goes through one queue so nonces never collide. */
 let queue: Promise<unknown> = Promise.resolve();
+/** A job that never settles (a dropped socket, a hung RPC) must not block every job behind it. */
+const JOB_TIMEOUT_MS = 150_000;
+const withTimeout = <T>(p: Promise<T>, ms: number, what: string) =>
+  new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${what} timed out after ${ms / 1000}s`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
 const enqueue = <T>(fn: () => Promise<T>) => {
-  const run = queue.then(fn, fn);
+  const job = () => withTimeout(fn(), JOB_TIMEOUT_MS, 'keeper job');
+  const run = queue.then(job, job);
   queue = run.catch(() => {});
   return run;
 };
@@ -201,23 +216,45 @@ async function anchorDayIfNeeded() {
   save();
 }
 
-/** Picks up players' swaps from new blocks for the ledger. */
+/** Blocks read per tick; when further behind than this the indexer skips ahead to stay live. */
+const INDEX_BATCH = 40;
+const rpcRaw = (method: string, params: unknown[]) => (api as any)._rpcCore.provider.send(method, params) as Promise<any>;
+
+/**
+ * Picks up players' swaps from new blocks for the ledger. Blocks are read raw, because polkadot.js
+ * can't decode some third-party extrinsics on this chain (an asset-fee signed extension it types as
+ * a MultiLocation), and one such block used to throw on every tick.
+ */
 async function indexTrades() {
   const head = (await api.rpc.chain.getHeader()).number.toNumber();
-  if (!state.lastBlock) state.lastBlock = head - 1;
-  for (let n = state.lastBlock + 1; n <= head; n++) {
-    const hash = await api.rpc.chain.getBlockHash(n);
-    const [block, events] = await Promise.all([api.rpc.chain.getBlock(hash), api.query.system.events.at(hash)]);
+  if (!state.lastBlock || head - state.lastBlock > INDEX_BATCH * 5) {
+    if (state.lastBlock) log(`indexer was ${head - state.lastBlock} blocks behind, skipping ahead`);
+    state.lastBlock = head - 1;
+  }
+  const to = Math.min(head, state.lastBlock + INDEX_BATCH);
+  for (let n = state.lastBlock + 1; n <= to; n++) {
+    const hash = (await api.rpc.chain.getBlockHash(n)).toHex();
+    let events: any;
+    try {
+      events = await api.query.system.events.at(hash);
+    } catch (e) {
+      log(`block ${n}: events unreadable, skipped (${(e as Error).message.slice(0, 80)})`);
+      state.lastBlock = n;
+      continue;
+    }
+    let extrinsics: string[] | undefined;
     for (const { event, phase } of events as any) {
       if (event.section === 'assets' && event.method === 'Transferred') { creditRumour(event.data); continue; }
       if (event.section !== 'assetConversion' || event.method !== 'SwapExecuted') continue;
       const who = event.data.who.toString();
       if (!state.players[who]) continue;
+      extrinsics ??= (await rpcRaw('chain_getBlock', [hash]))?.block?.extrinsics ?? [];
+      const ext = phase.isApplyExtrinsic ? extrinsics![phase.asApplyExtrinsic.toNumber()] : undefined;
       const path = event.data.path.toJSON() as [any, string][];
       const id = (k: any) => (k === 'native' || k?.native !== undefined ? 0 : Number(k.withId ?? k.WithId));
       state.trades.unshift({
         address: who,
-        hash: block.block.extrinsics[phase.asApplyExtrinsic.toNumber()].hash.toHex(),
+        hash: ext ? blake2AsHex(hexToU8a(ext), 256) : '',
         block: n,
         t: Date.now(),
         from: id(path[0][0]),
@@ -226,9 +263,9 @@ async function indexTrades() {
         amountOut: fromUnits(event.data.amountOut.toBigInt()),
       });
     }
+    state.lastBlock = n;
   }
   state.trades = state.trades.slice(0, 3000);
-  state.lastBlock = head;
 }
 
 /** A captain's DUCAT sent to the harbourmaster buys a rumour ticket, up to the daily limit. */
@@ -258,6 +295,15 @@ async function topUpTanks() {
 }
 
 let busy = false;
+let lastGoodTick = Date.now();
+/** If the keeper stops completing ticks (a socket that never comes back), exit so Railway restarts it. */
+const STALL_MS = 10 * 60_000;
+setInterval(() => {
+  if (Date.now() - lastGoodTick < STALL_MS) return;
+  log(`no good tick for ${Math.round((Date.now() - lastGoodTick) / 1000)}s, restarting`);
+  try { save(); } catch {}
+  process.exit(1);
+}, 30_000).unref();
 async function tick() {
   if (busy) return;
   busy = true;
@@ -275,6 +321,7 @@ async function tick() {
     if (FEE_MODE === 'native') await topUpTanks();
     await anchorDayIfNeeded();
     save();
+    lastGoodTick = Date.now();
   } catch (e) {
     log('tick error:', (e as Error).message);
   } finally {

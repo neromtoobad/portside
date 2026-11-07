@@ -58,12 +58,23 @@ const nonces = new Map<string, number>();
  * Signs, submits and waits for inclusion. Rejects with the decoded dispatch error.
  * `feeAsset` pays the fee in a game asset through ChargeAssetTxPayment.
  */
+export const SEND_TIMEOUT_MS = 90_000;
+
 export async function send(api: ApiPromise, tx: SubmittableExtrinsic<'promise'>, signer: KeyringPair, feeAsset?: number): Promise<Sent> {
   // accountNextIndex can lag right after inclusion (seen on Chopsticks), so keep our own count.
   const onChain = ((await api.query.system.account(signer.address)) as any).nonce.toNumber();
   const nonce = Math.max(onChain, nonces.get(signer.address) ?? 0);
   nonces.set(signer.address, nonce + 1);
   return new Promise((resolve, reject) => {
+    // A websocket drop mid-wait leaves the status callback silent forever, which would jam the
+    // keeper's queue. Give up after SEND_TIMEOUT_MS and forget the cached nonce.
+    let unsub: (() => void) | undefined;
+    let settled = false;
+    const finish = (fn: () => void) => { if (settled) return; settled = true; clearTimeout(timer); try { unsub?.(); } catch {} fn(); };
+    const timer = setTimeout(() => finish(() => { nonces.delete(signer.address); reject(new Error(`transaction not included after ${SEND_TIMEOUT_MS / 1000}s`)); }), SEND_TIMEOUT_MS);
+    const resolve0 = resolve, reject0 = reject;
+    resolve = ((v: Sent) => finish(() => resolve0(v))) as typeof resolve;
+    reject = ((e: unknown) => finish(() => reject0(e))) as typeof reject;
     const opts = { nonce, ...(feeAsset === undefined ? {} : { assetId: withId(feeAsset) }) };
     tx.signAndSend(signer, opts, ({ status, events, dispatchError, txHash }) => {
       if (dispatchError) {
@@ -84,7 +95,7 @@ export async function send(api: ApiPromise, tx: SubmittableExtrinsic<'promise'>,
           events: events.map(({ event }) => ({ section: event.section, method: event.method, data: event.data.toHuman() })),
         });
       }
-    }).catch(reject);
+    }).then((u) => { unsub = u; if (settled) try { u(); } catch {} }, reject);
   });
 }
 

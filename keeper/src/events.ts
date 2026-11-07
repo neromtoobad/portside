@@ -40,6 +40,7 @@ const ABI = [
   'function anchorDay(uint32 day, bytes32 root, uint32 players)',
   'function season() view returns (uint32)',
   'function round() view returns (uint32)',
+  'function commit() view returns (bytes32)',
   'event RoundOpened(uint32 indexed season, uint32 indexed round, uint8 good, uint8 kind, uint8 magnitude, bytes32 entropy)',
 ];
 
@@ -80,7 +81,7 @@ export class EventDrawer {
   async openSeason() {
     this.seed = newSeed();
     if (this.contract) {
-      await (await this.contract.openSeason(commitOf(this.seed))).wait();
+      await (await this.contract.openSeason(commitOf(this.seed))).wait(1, 90_000);
       this.season = Number(await this.contract.season());
     } else {
       this.season += 1;
@@ -89,17 +90,32 @@ export class EventDrawer {
     this.round = 0;
   }
 
+  /** True when the saved seed still opens the contract's current commit. */
+  async seedMatches() {
+    if (!this.contract) return true;
+    return (await this.contract.commit()) === commitOf(this.seed);
+  }
+
   async next(): Promise<HarbourEvent> {
     const seed = this.seed;
-    this.seed = newSeed();
-    const nextCommit = commitOf(this.seed);
+    const following = newSeed();
+    const nextCommit = commitOf(following);
     if (this.contract) {
-      const receipt = await (await this.contract.reveal(seed, nextCommit)).wait();
+      let receipt: any;
+      try {
+        receipt = await (await this.contract.reveal(seed, nextCommit)).wait(1, 90_000);
+      } catch (e) {
+        // Only move to the new seed if the reveal actually landed; otherwise retry this one later.
+        try { if ((await this.contract.commit()) === nextCommit) this.seed = following; } catch {}
+        throw e;
+      }
+      this.seed = following;
       const log = receipt.logs.map((l: any) => { try { return this.contract!.interface.parseLog(l); } catch { return null; } }).find((l: any) => l?.name === 'RoundOpened');
       const [season, round, good, kind, magnitude, entropy] = log!.args;
       this.round = Number(round);
       return { season: Number(season), round: Number(round), good: Number(good), kind: Number(kind), magnitude: Number(magnitude), entropy, proof: receipt.hash, source: 'contract' };
     }
+    this.seed = following;
     const head = (await this.api.rpc.chain.getFinalizedHead()).toHex();
     const entropy = keccak256(solidityPacked(['bytes32', 'bytes32', 'uint32', 'uint32'], [seed, head, this.season, this.round]));
     const { good, kind, magnitude } = drawEvent(entropy);
@@ -109,7 +125,7 @@ export class EventDrawer {
   }
 
   async anchorDay(day: number, root: string, players: number) {
-    if (this.contract) return (await (await this.contract.anchorDay(day, root, players)).wait()).hash as string;
+    if (this.contract) return (await (await this.contract.anchorDay(day, root, players)).wait(1, 90_000)).hash as string;
     return (await send(this.api, this.api.tx.system.remarkWithEvent(`portside:day:${this.season}:${day}:${root}:${players}`), this.keeper)).hash;
   }
 }
